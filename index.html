@@ -46,6 +46,11 @@ fieldset.mk{border:1px solid var(--line);border-radius:8px;margin:8px 0;padding:
 .wlist{max-height:130px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:4px 8px;display:flex;flex-direction:column;gap:2px}
 .mkg{border:0;border-bottom:1px solid var(--line)}.mkg summary{padding:5px 2px;font-weight:400}.mkf{display:flex;flex-direction:column;gap:2px;padding:2px 0 8px 22px;font-size:12px}
 .idf th:first-child,.idf td:first-child{width:28px;text-align:center}
+
+.warnx{color:var(--warn)}
+/* iPad・iPhone: 入力欄は16px以上(Safariの自動拡大を防ぐ)、ボタンは指で押せる大きさ */
+@media (hover:none) and (pointer:coarse){input,select,textarea{font-size:16px}button,label.sec,.wbtn{min-height:44px}summary{padding-top:14px;padding-bottom:14px}}
+@media(max-width:700px){header h1{font-size:18px}header small{display:block}.brow select{min-width:0;max-width:100%;width:100%}.brow input[type=text]{width:100%}.dlg table.idf{font-size:11px}}
 </style></head><body>
 <header><h1>特定技能 入管書類作成</h1><small>マスタを入力 → 国籍に応じた言語併記の様式に差し込み → Word(docx)・Excel(提出書類一覧表)で出力</small></header>
 <main><section>
@@ -62,8 +67,9 @@ fieldset.mk{border:1px solid var(--line);border-radius:8px;margin:8px 0;padding:
 <p class="note" style="margin:0 0 6px">アプリのマスタ項目すべて(全書類分)の記入用紙です。書類・項目が増えると用紙の項目も増えます。記入後に取り込むと、マスタへ自動で入力されます。</p>
 <div class="row" style="margin-top:6px"><button class="sec" id="mkin">記入用紙を作成</button>
 <label class="sec" style="display:inline-block;cursor:pointer;padding:7px 10px;border:1px solid var(--line);border-radius:8px">記入用紙を取り込む<input id="inf" type="file" accept=".xlsx" hidden></label></div>
-<h2 style="margin-top:18px">バックアップ</h2>
-<div class="row"><button class="sec" id="exp">全データを書き出し(バックアップ)</button>
+<h2 style="margin-top:18px">バックアップ(端末間の受け渡し)</h2>
+<p class="note" id="lastbk" style="margin:0 0 6px"></p>
+<div class="row"><button class="sec" id="exp">全データを書き出し(バックアップ)</button><button class="sec" id="shr" hidden>共有で保存(ファイル・OneDrive等)</button>
 <label class="sec" style="display:inline-block;cursor:pointer;padding:7px 10px;border:1px solid var(--line);border-radius:8px">読み込み<input id="imp" type="file" accept=".json" hidden></label></div>
 <p class="note">入力内容は、保存先フォルダ(未接続ならこのブラウザ内)にのみ保存され、外部へ送信しません。出力した書類は必ずWordで開き、記載内容と翻訳を確認してから提出してください。</p>
 </div></aside></main>
@@ -1853,7 +1859,8 @@ function fillSelects(){
   $('#odel').disabled=!w||!w.link;
   $('#ocnt').textContent=Object.keys(S.orgs).length+'社'; $('#rcnt').textContent=Object.keys(S.rsos).length+'件';
   const un=$('#uname'); if(un&&document.activeElement!==un) un.value=userName;
-  const fb=$('#fbtn'); if(fb){ fb.textContent=B.dir?'別のフォルダに切り替え':B.needPerm?'フォルダに再接続':'保存フォルダを選択(OneDrive等)'; $('#fsync').hidden=!B.dir; $('#fdis').hidden=!B.dir; }
+  const nd=$('#nodir'); if(nd) nd.hidden=!!(window.showDirectoryPicker||window.__TEST_DIR);
+  const fb=$('#fbtn'); if(fb){ if(!(window.showDirectoryPicker||window.__TEST_DIR)){ fb.disabled=true; fb.textContent='フォルダ保存はこの端末では使えません'; } else fb.textContent=B.dir?'別のフォルダに切り替え':B.needPerm?'フォルダに再接続':'保存フォルダを選択(OneDrive等)'; $('#fsync').hidden=!B.dir; $('#fdis').hidden=!B.dir; }
   setStatus(); }
 function buildBar(){
   const bar=$('#bar'); bar.innerHTML=
@@ -1861,6 +1868,7 @@ function buildBar(){
    '<div class="brow"><b>外国人</b><input type="text" id="wsearch" placeholder="氏名・国籍・機関名で絞込" size="20"><select id="sw"></select><span class="cnt" id="wcnt"></span><button class="sec" id="wnew">+新規</button><button class="sec" id="dup">複製</button><button class="sec" id="del">削除</button></div>'+
    '<div class="brow"><b>特定技能所属機関</b><select id="so"></select><span class="cnt" id="ocnt"></span><button class="sec" id="onew">+新規</button><button class="sec" id="odel">削除</button>'+
    '<b style="margin-left:10px">登録支援機関</b><select id="sr"></select><span class="cnt" id="rcnt"></span><button class="sec" id="rnew">+新規</button><button class="sec" id="rdel">削除</button></div>'+
+   '<p class="note warnx" id="nodir" hidden>この端末のブラウザ(iPad・iPhone の Safari 等)は、フォルダへの自動保存に対応していません。入力内容はこの端末のブラウザ内にだけ保存されます。ほかの端末(PCなど)と共有するときは、画面右(スマホでは下)の「バックアップ」で書き出し → OneDrive などに保存 → 別の端末で「読み込み」を使います。Safari は長期間開かないと保存内容が消えることがあるため、入力したらこまめに書き出してください。</p>'+
    '<p class="note" style="margin:6px 0 0">外国人は所属機関を、所属機関は(全部委託する場合の)登録支援機関を選ぶだけで、機関・登録支援機関の入力内容が書類に反映されます。</p>';
   $('#fbtn').onclick=()=>{ if(B.needPerm&&!B.dir) reconnect(); else connect(); };
   $('#fsync').onclick=()=>syncDir(true); $('#fdis').onclick=disconnect;
@@ -2072,13 +2080,47 @@ async function importIntake(file){
   try{ const r=await Intake.parse(JSZip,new Uint8Array(await file.arrayBuffer()),SCHEMA,COUNTRIES,LANGS); const P=planIntake(r); showIntake(P,()=>applyIntake(P)); }
   catch(e){ alert('記入用紙を読み込めませんでした: '+e.message); }
 }
-function exportAll(){ const strip=o=>Object.values(o).map(clean); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify({v:2,orgs:strip(S.orgs),rsos:strip(S.rsos),workers:strip(S.workers)},null,1)],{type:'application/json'})); a.download='tokutei_master.json'; a.click(); }
+/* ---------- バックアップ(書き出し・読み込み): 端末間の受け渡し用 ---------- */
+const pad2=n=>String(n).padStart(2,'0');
+const stampFile=d=>d.getFullYear()+pad2(d.getMonth()+1)+pad2(d.getDate())+'-'+pad2(d.getHours())+pad2(d.getMinutes());
+const fmtDT=t=>{ const d=new Date(t); return isNaN(d)?'(日時なし)':d.getFullYear()+'/'+pad2(d.getMonth()+1)+'/'+pad2(d.getDate())+' '+pad2(d.getHours())+':'+pad2(d.getMinutes()); };
+const LBK='tokutei_lastbk';
+function lastBk(){ try{ return localStorage.getItem(LBK)||''; }catch(e){ return ''; } }
+function backupFile(){ const strip=o=>Object.values(o).map(clean); const name='tokutei_master_'+stampFile(new Date())+'.json';
+  const blob=new Blob([JSON.stringify({v:2,exported:new Date().toISOString(),by:userName||'',orgs:strip(S.orgs),rsos:strip(S.rsos),workers:strip(S.workers)},null,1)],{type:'application/json'}); return {name,blob}; }
+function markBk(){ try{ localStorage.setItem(LBK,new Date().toISOString()); }catch(e){} showBk(); }
+function exportAll(){ const {name,blob}=backupFile(); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },3000); markBk(); }
+function canShareFile(){ try{ return !!(navigator.canShare&&navigator.canShare({files:[new File(['{}'],'a.json',{type:'application/json'})]})); }catch(e){ return false; } }
+async function shareAll(){ const {name,blob}=backupFile(); try{ await navigator.share({files:[new File([blob],name,{type:'application/json'})],title:name}); markBk(); }catch(e){ if(e&&e.name!=='AbortError') alert('共有できませんでした。「全データを書き出し」を使ってください。('+(e.message||e)+')'); } }
+function showBk(){ const el=$('#lastbk'); if(!el) return; const t=lastBk(); const age=t?(Date.now()-Date.parse(t))/864e5:1e9; const noDir=!B.dir;
+  el.textContent=t?('最終バックアップ: '+fmtDT(t)+(noDir&&age>7?'(7日以上前です。書き出しをお勧めします)':'')):(noDir?'まだバックアップを書き出していません。入力内容はこのブラウザ内だけにあります。':'');
+  el.className='note'+(noDir&&age>7?' warnx':''); }
+/* 読み込み: 端末内のデータとの新旧を比べ、確認してから取り込む(古いバックアップで新しい入力を消さない) */
+function planImport(j){ const P={kinds:[],exported:j.exported||'',by:j.by||''}; const L={org:'特定技能所属機関',rso:'登録支援機関',wk:'外国人'}; const nameOf=(k,d)=>k==='wk'?d.wk_name:k==='org'?d.org_name:d.rso_name;
+  [['org',j.orgs],['rso',j.rsos],['wk',j.workers]].forEach(([k,arr])=>{ const K={k,label:L[k],add:[],newer:[],older:[],same:[]};
+    (arr||[]).forEach(r=>{ if(!r||!r.id) return; const ex=coll(k)[r.id]; const it={r,name:nameOf(k,r.data||{})||'(名称なし)'};
+      if(!ex){ K.add.push(it); return; }
+      if(JSON.stringify(ex.data)===JSON.stringify(r.data||{})&&(ex.link||'')===(r.link||'')){ K.same.push(it); return; }
+      const a=Date.parse(r.upd)||0, b=Date.parse(ex.upd)||0; it.fa=r.upd; it.la=ex.upd; (b>a?K.older:K.newer).push(it); });
+    P.kinds.push(K); }); return P; }
+function applyImport(P,mode){ P.kinds.forEach(K=>{ const list=K.add.concat(K.newer,mode==='all'?K.older:[]);
+    list.forEach(({r})=>{ const x=coll(K.k)[r.id]||mk(K.k,{},'',r.id); x.data=r.data||{}; x.link=r.link||''; x.upd=r.upd||new Date().toISOString(); x._dirty=true; }); });
+  const first=Object.keys(S.workers).filter(id=>Object.keys(S.workers[id].data).length)[0]; if(first&&!curW()) S.cur=first; schedule(); }
+function showImport(j){ const P=planImport(j); const n=(K,f)=>K.map(x=>x[f].length).reduce((a,b)=>a+b,0); const tot={add:0,newer:0,older:0,same:0}; P.kinds.forEach(K=>Object.keys(tot).forEach(f=>tot[f]+=K[f].length));
+  let h='<h3>バックアップの読み込み</h3><p class="note">書き出し日時: '+hx(P.exported?fmtDT(P.exported):'(不明)')+(P.by?' / 更新者名: '+hx(P.by):'')+'</p>';
+  h+='<table class="idf"><tr><th></th><th>新規(追加)</th><th>ファイルの方が新しい</th><th>この端末の方が新しい</th><th>同じ内容</th></tr>'+P.kinds.map(K=>'<tr><td>'+K.label+'</td><td>'+K.add.length+'</td><td>'+K.newer.length+'</td><td>'+K.older.length+'</td><td>'+K.same.length+'</td></tr>').join('')+'</table>';
+  const ol=[]; P.kinds.forEach(K=>K.older.forEach(x=>ol.push('<li>'+K.label+'「'+hx(x.name)+'」 端末: '+hx(fmtDT(x.la))+' / ファイル: '+hx(fmtDT(x.fa))+'</li>')));
+  if(ol.length) h+='<p class="note" style="color:var(--warn)">この端末の方が新しい内容が'+ol.length+'件あります。「新しいものだけ取り込む」を選ぶと、これらは上書きしません。</p><ul class="note">'+ol.slice(0,12).join('')+(ol.length>12?'<li>ほか'+(ol.length-12)+'件</li>':'')+'</ul>';
+  h+='<div class="row" style="margin:12px 0 0"><button class="pri" id="imA" style="width:auto;padding:8px 14px">新しいものだけ取り込む(推奨)</button><button class="sec" id="imB">すべて上書きして取り込む</button><button class="sec" id="imC">キャンセル</button></div>';
+  const ov=document.createElement('div'); ov.className='ovl'; ov.innerHTML='<div class="dlg">'+h+'</div>'; document.body.appendChild(ov); const close=()=>ov.remove();
+  $('#imC').onclick=close; $('#imA').onclick=()=>{ applyImport(P,'newer'); close(); renderAll(); }; $('#imB').onclick=()=>{ if(tot.older&&!confirm('この端末の方が新しい'+tot.older+'件も、ファイルの内容で上書きします。よろしいですか?')) return; applyImport(P,'all'); close(); renderAll(); }; }
 function importAll(j){
   if(j&&j.v===2){ const put=(k,arr)=>(arr||[]).forEach(r=>{ if(!r||!r.id) return; const x=coll(k)[r.id]||mk(k,{},'',r.id); x.data=r.data||{}; x.link=r.link||''; x.upd=new Date().toISOString(); x._dirty=true; }); put('org',j.orgs); put('rso',j.rsos); put('wk',j.workers); }
   else if(j&&j.workers){ migrateV1(j); }
   else throw new Error('形式が違います');
   const first=Object.keys(S.workers).filter(id=>Object.keys(S.workers[id].data).length)[0]; if(first) S.cur=first; schedule(); }
 async function startup(){
+  try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){}
   load(); buildBar(); renderAll();
   if(window.__TEST_DIR&&window.__AUTO_CONNECT){ await attach(await window.__TEST_DIR()); return; }
   const h=await hGet(); if(h&&window.showDirectoryPicker){ try{ const p=await h.queryPermission({mode:'readwrite'}); if(p==='granted'){ await attach(h); } else { B.pending=h; B.needPerm=true; setStatus(); fillSelects(); } }catch(e){ B.pending=h; B.needPerm=true; fillSelects(); } }
@@ -2086,9 +2128,9 @@ async function startup(){
 function init(){
   startup();
   $('#gen-zip').onclick=()=>gen(true); $('#gen-each').onclick=()=>gen(false);
-  $('#exp').onclick=exportAll;
+  $('#exp').onclick=exportAll; { const sb=$('#shr'); if(sb){ if(canShareFile()){ sb.hidden=false; sb.onclick=shareAll; } } } showBk();
   $('#mkin').onclick=showMaker; $('#inf').onchange=e=>{ const f=e.target.files[0]; if(f) importIntake(f); e.target.value=''; };
-  $('#imp').onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{ try{ importAll(JSON.parse(r.result)); renderAll(); }catch(err){alert('読み込めませんでした: '+err.message);} e.target.value=''; }; r.readAsText(f); };
+  $('#imp').onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{ try{ const jj=JSON.parse(r.result); if(jj&&jj.v===2) showImport(jj); else { importAll(jj); renderAll(); } }catch(err){alert('読み込めませんでした: '+err.message);} e.target.value=''; }; r.readAsText(f); };
   window.addEventListener('focus',()=>{ if(B.dir&&Date.now()-B.lastSync>15000) syncDir(false); });
   document.addEventListener('visibilitychange',()=>{ if(document.hidden){ if(allRecs().some(([k,r])=>r._dirty)) flush(); } else if(B.dir&&Date.now()-B.lastSync>15000) syncDir(false); });
   window.addEventListener('beforeunload',e=>{ if(allRecs().some(([k,r])=>r._dirty)){ flush(); e.preventDefault(); e.returnValue=''; } });
