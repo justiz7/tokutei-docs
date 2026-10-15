@@ -2169,7 +2169,7 @@ function showMaker(){
   ['wk','org','rso'].forEach(k=>{ const arr=k==='wk'?ws:k==='org'?os:rs, hasEx=arr.length>0;
     h+='<fieldset class="mk" data-k="'+k+'"><legend><label><input type="checkbox" class="kon"'+(k==='wk'?' checked':'')+'> <b>'+KN[k]+'</b></label></legend><div class="mkb">'
       +'<div class="row" style="margin:0 0 6px"><label class="opt"><input type="radio" name="md_'+k+'" value="ex"'+(hasEx?' checked':' disabled')+'> 既存の情報を修正する</label><label class="opt"><input type="radio" name="md_'+k+'" value="new"'+(hasEx?'':' checked')+'> 新規に登録する</label></div>'
-      +'<div class="exsel">'+(!hasEx?'<span class="note">登録済みのデータがありません</span>':k==='wk'?'<div class="wlist">'+ws.map(w=>'<label class="opt"><input type="checkbox" class="wsel" value="'+w.id+'"'+(cur&&w.id===cur.id?' checked':'')+'> '+hx(wLabel(w))+'</label>').join('')+'</div>':sel('ex_'+k,arr,r=>k==='org'?(r.data.org_name||'(機関名未入力)'):(r.data.rso_name||'(名称未入力)'),k==='org'?(co&&co.id):(cr&&cr.id)))+'</div>'
+      +'<div class="exsel">'+(!hasEx?'<span class="note">登録済みのデータがありません</span>':k==='wk'?'<div class="row" style="margin:0 0 6px"><select id="mkorg"><option value="*">(すべての機関)</option>'+os.map(o=>'<option value="'+o.id+'"'+(cur&&cur.link===o.id?' selected':'')+'>'+hx(o.data.org_name||'(機関名未入力)')+'</option>').join('')+'<option value="">(機関未設定)</option></select><input type="search" id="mkq" placeholder="名前で絞り込み" style="flex:1;min-width:120px"><button class="sec" type="button" id="mkall">表示中を全選択</button><button class="sec" type="button" id="mknone">選択を全解除</button></div><div class="wlist">'+ws.map(w=>'<label class="opt" data-org="'+hx(w.link||'')+'"><input type="checkbox" class="wsel" value="'+w.id+'"'+(cur&&w.id===cur.id?' checked':'')+'> '+hx(wLabel(w))+'</label>').join('')+'</div>':sel('ex_'+k,arr,r=>k==='org'?(r.data.org_name||'(機関名未入力)'):(r.data.rso_name||'(名称未入力)'),k==='org'?(co&&co.id):(cr&&cr.id)))+'</div>'
       +'<div class="row" style="margin:6px 0"><button class="sec gall" type="button">項目をすべて選択</button><button class="sec gnone" type="button">すべて解除</button></div>'
       +grp(k).map(([g,fs])=>'<details class="mkg"><summary><label><input type="checkbox" class="gck"> '+hx(g)+'</label> <span class="note">('+fs.length+'項目)</span></summary><div class="mkf">'+fs.map(f=>'<label class="opt"><input type="checkbox" class="fck" data-f="'+f.k+'"> '+hx(f.l)+'</label>').join('')+'</div></details>').join('')
       +'</div></fieldset>'; });
@@ -2179,6 +2179,10 @@ function showMaker(){
   $$('.fck',ov).forEach(c=>c.onchange=()=>{ const d=c.closest('details'); const a=$$('.fck',d); d.querySelector('.gck').checked=a.every(i=>i.checked); });
   $$('.gall',ov).forEach(b=>b.onclick=()=>{ const f=b.closest('fieldset'); $$('.fck,.gck',f).forEach(i=>i.checked=true); });
   $$('.gnone',ov).forEach(b=>b.onclick=()=>{ const f=b.closest('fieldset'); $$('.fck,.gck',f).forEach(i=>i.checked=false); });
+  const mkF=()=>{ const o=$('#mkorg',ov), q=$('#mkq',ov); if(!o) return; const qq=nz(q.value); $$('.wlist label',ov).forEach(l=>{ l.style.display=((o.value==='*'||l.dataset.org===o.value)&&(!qq||nz(l.textContent).includes(qq)))?'':'none'; }); };
+  if($('#mkorg',ov)){ $('#mkorg',ov).onchange=mkF; $('#mkq',ov).oninput=mkF; mkF();
+    $('#mkall',ov).onclick=()=>$$('.wlist label',ov).forEach(l=>{ if(l.style.display!=='none') l.querySelector('input').checked=true; });
+    $('#mknone',ov).onclick=()=>$$('.wsel',ov).forEach(i=>i.checked=false); }
   $('#mno',ov).onclick=()=>ov.remove();
   $('#mok',ov).onclick=async()=>{
     const kinds=[], keys=new Set(), pf={};
