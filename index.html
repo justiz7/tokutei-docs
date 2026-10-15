@@ -68,8 +68,8 @@ fieldset.mk{border:1px solid var(--line);border-radius:8px;margin:8px 0;padding:
 <div class="row" style="margin-top:6px"><button class="sec" id="mkin">記入用紙を作成</button>
 <label class="sec" style="display:inline-block;cursor:pointer;padding:7px 10px;border:1px solid var(--line);border-radius:8px">記入用紙を取り込む<input id="inf" type="file" accept=".xlsx" hidden></label></div>
 <h2 style="margin-top:18px">入管オンライン一括申請(更新)用データ</h2>
-<p class="note" style="margin:0 0 6px">在留申請オンラインシステムの「一括申請用テンプレート(更新シート)」に貼り付けるExcelです。入力漏れは「入力漏れ」シートに出ます。</p>
-<div class="row" style="margin-top:6px"><button class="sec" id="imx-org">この機関の全員分を書き出し</button><button class="sec" id="imx-one">表示中の1人分</button></div>
+<p class="note" style="margin:0 0 6px">在留申請オンラインシステムの「一括申請用テンプレート(更新シート)」に貼り付けるExcelです。機関を選び、書き出す外国人にチェックを入れてください。入力漏れは「入力漏れ」シートに出ます。</p>
+<div id="imx-box"></div>
 <p class="note" id="imx-msg" style="margin:6px 0 0"></p>
 <h2 style="margin-top:18px">バックアップ(端末間の受け渡し)</h2>
 <p class="note" id="lastbk" style="margin:0 0 6px"></p>
@@ -2074,21 +2074,51 @@ const IMX=(function(){
   }
   return {build,xlsx,parseAddr,colName};
 })();
-function immiWorkers(all){
-  const w=curW(); if(!w) return []; if(!all) return [w];
-  return Object.values(S.workers).filter(x=>x.link===w.link).sort((a,b)=>(a.data.wk_name||'￿').localeCompare(b.data.wk_name||'￿','ja'));
+/* 書き出す対象を、機関→外国人のチェックで選ぶ */
+const IMXSEL=(()=>{ let st={org:null,ids:{},q:''}; try{ const j=JSON.parse(localStorage.getItem('tokutei_imx_sel')||'null'); if(j&&j.ids) st.ids=j.ids; }catch(e){} return st; })();
+function imxSave(){ try{ localStorage.setItem('tokutei_imx_sel',JSON.stringify({ids:IMXSEL.ids})); }catch(e){} }
+function imxList(){ const org=IMXSEL.org; const q=(IMXSEL.q||'').trim().toLowerCase();
+  return Object.values(S.workers).filter(w=>(w.link||'')===org).filter(w=>!q||(w.data.wk_name||'').toLowerCase().includes(q)).sort((a,b)=>(a.data.wk_name||'￿').localeCompare(b.data.wk_name||'￿','ja')); }
+function imxChosen(){ return Object.values(S.workers).filter(w=>(w.link||'')===IMXSEL.org&&IMXSEL.ids[w.id]).sort((a,b)=>(a.data.wk_name||'￿').localeCompare(b.data.wk_name||'￿','ja')); }
+function renderImx(){
+  const box=$('#imx-box'); if(!box) return;
+  const orgs=Object.values(S.orgs).sort((a,b)=>(a.data.org_name||'￿').localeCompare(b.data.org_name||'￿','ja'));
+  const cw=curW(); if(IMXSEL.org===null||(IMXSEL.org!==''&&!S.orgs[IMXSEL.org])) IMXSEL.org=(cw&&cw.link&&S.orgs[cw.link])?cw.link:(orgs[0]?orgs[0].id:'');
+  box.innerHTML='';
+  const row1=document.createElement('div'); row1.className='row'; row1.style.marginTop='6px';
+  const lab=document.createElement('b'); lab.textContent='機関'; lab.style.marginRight='6px';
+  const so=document.createElement('select'); so.style.maxWidth='100%';
+  orgs.concat([{id:'',data:{org_name:'(機関未設定の外国人)'}}]).forEach(o=>{ const e=document.createElement('option'); e.value=o.id; e.textContent=o.data.org_name||'(機関名未入力)'; if(o.id===IMXSEL.org) e.selected=true; so.appendChild(e); });
+  so.onchange=()=>{ IMXSEL.org=so.value; renderImx(); };
+  row1.append(lab,so); box.appendChild(row1);
+  const row2=document.createElement('div'); row2.className='row'; row2.style.marginTop='6px';
+  const q=document.createElement('input'); q.type='text'; q.placeholder='氏名で絞込'; q.size=14; q.value=IMXSEL.q||''; q.oninput=()=>{ IMXSEL.q=q.value; listRender(); };
+  const bAll=document.createElement('button'); bAll.className='sec'; bAll.textContent='表示中を全選択'; 
+  const bNone=document.createElement('button'); bNone.className='sec'; bNone.textContent='選択を全解除';
+  row2.append(q,bAll,bNone); box.appendChild(row2);
+  const list=document.createElement('div'); list.style.cssText='max-height:220px;overflow:auto;margin-top:6px;border:1px solid var(--line);border-radius:8px;padding:4px 8px'; box.appendChild(list);
+  const go=document.createElement('button'); go.className='sec'; go.style.marginTop='6px'; box.appendChild(go);
+  function upd(){ const n=imxChosen().length; go.textContent='選択した'+n+'名を書き出し'; go.disabled=!n; }
+  function listRender(){ list.innerHTML=''; const ws=imxList();
+    if(!ws.length){ const p=document.createElement('div'); p.className='note'; p.textContent='この機関の外国人がいません。'; list.appendChild(p); }
+    ws.forEach(w=>{ const l=document.createElement('label'); l.className='opt'; l.style.display='block'; const c=document.createElement('input'); c.type='checkbox'; c.checked=!!IMXSEL.ids[w.id];
+      c.onchange=()=>{ if(c.checked) IMXSEL.ids[w.id]=1; else delete IMXSEL.ids[w.id]; imxSave(); upd(); };
+      l.append(c,' '+(w.data.wk_name||'(氏名未入力)')+' / '+(w.data.wk_nat||'')); list.appendChild(l); });
+    upd(); }
+  bAll.onclick=()=>{ imxList().forEach(w=>{ IMXSEL.ids[w.id]=1; }); imxSave(); listRender(); };
+  bNone.onclick=()=>{ imxChosen().forEach(w=>{ delete IMXSEL.ids[w.id]; }); imxSave(); listRender(); };
+  go.onclick=()=>immiExport(imxChosen());
+  listRender();
 }
-async function immiExport(all){
-  const msg=$('#imx-msg'); const ws=immiWorkers(all); if(!ws.length){ msg.textContent='外国人が選択されていません。'; return; }
-  if(all&&!curW().link){ msg.textContent='所属機関が未設定です。「この機関の全員」は、機関を設定した外国人で使えます。'; return; }
-  const o=curOrg(); const nm=(o&&o.data.org_name)||'';
+async function immiExport(ws){
+  const msg=$('#imx-msg'); if(!ws||!ws.length){ msg.textContent='書き出す外国人を選んでください。'; return; }
+  const o=ws[0].link?S.orgs[ws[0].link]:null; const nm=(o&&o.data.org_name)||'';
   try{ const r=await IMX.xlsx(ws,nm); const d=new Date(), p=n=>('0'+n).slice(-2);
-    dl('入管オンライン更新_貼り付け用_'+(all?(nm||'機関')+'_':(ws[0].data.wk_name||'1名')+'_')+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'.xlsx',r.bytes);
+    dl('入管オンライン更新_貼り付け用_'+(nm||'機関未設定')+'_'+ws.length+'名_'+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'.xlsx',r.bytes);
     msg.textContent=r.count+'名分を書き出しました。入力漏れ・変換できない項目: '+r.issues.length+'件'+(r.issues.length?'(ファイルの「入力漏れ」シートを確認)':''); }
   catch(e){ msg.textContent='書き出しに失敗しました: '+e.message; }
 }
-window.immiExport=immiExport; window.IMX=IMX;
-(function(){ const a=$('#imx-org'), b=$('#imx-one'); if(a) a.onclick=()=>immiExport(true); if(b) b.onclick=()=>immiExport(false); })();
+window.immiExport=immiExport; window.IMX=IMX; window.imxSel=IMXSEL;
 function b64(s){const bin=atob(s);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
 async function gen(asZip){
   if(allRecs().some(([k,r])=>r._dirty)) await flush();
@@ -2121,7 +2151,7 @@ async function gen(asZip){
 function migrateSpE(){ Object.values(S.orgs).forEach(o=>{ const r=o.link&&S.rsos[o.link]; if(!r) return; const ks=['sp_e_name','sp_e_name_en','sp_e_name_ne']; if(!ks.some(k=>!emptyV(o.data[k]))) return;
     if(ks.every(k=>emptyV(r.data['rs_'+k.slice(3)]))){ ks.forEach(k=>{ if(!emptyV(o.data[k])) r.data['rs_'+k.slice(3)]=o.data[k]; }); touch('rso',r); }
     ks.forEach(k=>{ delete o.data[k]; }); touch('org',o); }); }
-function renderAll(){ migrateSpE(); ensureW(); renderTop(); renderForm(); renderOut(); }
+function renderAll(){ migrateSpE(); ensureW(); renderTop(); renderForm(); renderOut(); renderImx(); }
 /* ---------- マスタ記入用紙(Excel)の作成・取り込み ---------- */
 const hx=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const FLD=(()=>{ const m={}; SCHEMA.forEach(g=>g.fields.forEach(f=>{ if(!m[f.k]) m[f.k]=f; })); return m; })();
