@@ -553,8 +553,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
       d.sp_lang_f=d.wk_lang==='id'?'Indonesia':d.wk_lang==='ne'?'नेपाली':(d.sp_lang_en||'English');
       { // 通訳者の所属・氏名。所属は自由入力(例: ●●翻訳会社)。空欄で氏名だけあれば「履行補助者」
-        const nf=d['sp_ip_'+lgx]||(lgx==='id'||lgx==='ne'?'':d.sp_ip_en)||'', nj=d.sp_ip_name||'', og=d.sp_ip_org||'';
-        const lab=og||((nf||nj)?'履行補助者':''), labF=og?(F('sp_ip_org')||trFree(og,lgx,d.gl_extra)):((nf||nj)?trFree('履行補助者',lgx,d.gl_extra):'');
+        const nf=d['sp_ip_'+lgx]||(lgx==='id'||lgx==='ne'?'':d.sp_ip_en)||'', nj=d['sp_ip_name_'+lgx]||d.sp_ip_name||'', og=d['sp_ipo_'+lgx]||d.sp_ip_org||'', ogOwn=d['sp_ip_orgf_'+lgx]||'', ogShared=!d['sp_ipo_'+lgx];
+        const lab=og||((nf||nj)?'履行補助者':''), labF=og?(ogOwn||(ogShared&&F('sp_ip_org'))||trFree(og,lgx,d.gl_extra)):((nf||nj)?trFree('履行補助者',lgx,d.gl_extra):'');
         d.sp_ip=[lab,nj||nf].filter(Boolean).join(' '); d.sp_ip_f=[labF,nf||nj].filter(Boolean).join(' '); }
       if(d.sp_rent_expl&&F('sp_rent_expl')) d.sp_rent_expl_f=F('sp_rent_expl');
       { const dy=Array.isArray(d.sp_c_wd_days)&&d.sp_c_wd_days.length?d.sp_c_wd_days:['1','2','3','4','5'];
@@ -1428,9 +1428,14 @@ window.SCHEMA=[
   {k:'sp_tb_name',l:'第三者委託先B 氏名・名称(役職)',w:3},{k:'sp_tb_zip',l:'委託先B 郵便番号',ph:'100-0005',w:1},{k:'sp_tb_addr',l:'委託先B 住所',w:6},
   {k:'sp_m',l:'実施方法(情報提供・面談など)',t:'checks',o:[['person','対面'],['video','テレビ電話/オンライン'],['other','その他']],w:6},{k:'sp_m_other',l:'実施方法 その他の内容',w:3},
   {k:'sp_m3',l:'3-B 生活契約の支援方法',t:'checks',o:[['info','手続に係る情報提供'],['accomp','必要に応じて同行'],['other','その他']],w:6},{k:'sp_m3_other',l:'3-B その他の内容',w:3},
-  {k:'sp_ip_org',l:'【通訳者】所属・日本語(例: ●●翻訳会社。空欄なら氏名があるとき「履行補助者」)※下の外国語表記は自動で続けて表示',w:6},
-  {k:'sp_ip_name',l:'【通訳者】氏名・日本語欄用',w:6},
-  {k:'sp_ip_en',l:'【通訳者】氏名ローマ字 英語版(他言語の国籍も使用)',ph:'John Smith',w:2},{k:'sp_ip_id',l:'【通訳者】氏名ローマ字 インドネシア語版',ph:'Budi Santoso',w:2},{k:'sp_ip_ne',l:'【通訳者】氏名ローマ字 ネパール語版',ph:'Ram Sharma',w:2},
+  {k:'sp_ip_org',l:'【通訳者・共通】所属・日本語(例: ●●翻訳会社。空欄なら氏名があるとき「履行補助者」)※言語別の欄が空のときに使用。外国語表記は下に自動で続く',w:6},
+  {k:'sp_ip_name',l:'【通訳者・共通】氏名・日本語欄用(言語別の欄が空のときに使用)',w:6},
+  {k:'sp_ipo_en',l:'【通訳者・英語版】所属・日本語欄',w:3},{k:'sp_ip_orgf_en',l:'【通訳者・英語版】所属・英語表記',w:3},
+  {k:'sp_ip_name_en',l:'【通訳者・英語版】氏名・日本語欄',w:3},{k:'sp_ip_en',l:'【通訳者・英語版】氏名ローマ字(他言語の国籍も使用)',ph:'John Smith',w:3},
+  {k:'sp_ipo_id',l:'【通訳者・インドネシア語版】所属・日本語欄',w:3},{k:'sp_ip_orgf_id',l:'【通訳者・インドネシア語版】所属・インドネシア語/ローマ字表記',w:3},
+  {k:'sp_ip_name_id',l:'【通訳者・インドネシア語版】氏名・日本語欄',w:3},{k:'sp_ip_id',l:'【通訳者・インドネシア語版】氏名ローマ字',ph:'Budi Santoso',w:3},
+  {k:'sp_ipo_ne',l:'【通訳者・ネパール語版】所属・日本語欄',w:3},{k:'sp_ip_orgf_ne',l:'【通訳者・ネパール語版】所属・ネパール語表記',w:3},
+  {k:'sp_ip_name_ne',l:'【通訳者・ネパール語版】氏名・日本語欄',w:3},{k:'sp_ip_ne',l:'【通訳者・ネパール語版】氏名ローマ字',ph:'Ram Sharma',w:3},
   {k:'sp_lang',l:'実施言語(「語」の前。空欄なら国籍から自動)',ph:'インドネシア',w:2},{k:'sp_lang_en',l:'実施言語(英語表記。空欄なら自動)',ph:'Indonesian',w:2},{k:'sp_plan_date',l:'各支援の実施予定日(空欄=「適宜実施」)',t:'date',w:2},
   {k:'sp_h_guid',l:'事前ガイダンス 合計時間',t:'num',w:2},{k:'sp_h_orient',l:'生活オリエンテーション 合計時間',t:'num',w:2},
   {k:'sp_ap_in',l:'入国時 出迎え空港名',ph:'成田',w:2},{k:'sp_pk_in',l:'入国時 送迎方法',ph:'社用車',w:2},
