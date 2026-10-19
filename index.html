@@ -24,6 +24,7 @@ aside .card{padding:16px;position:sticky;top:12px} aside h2{font-size:14px;margi
 button.pri{width:100%;padding:10px;border:0;border-radius:8px;background:var(--acc);color:#fff;font:inherit;font-weight:600;cursor:pointer;margin-top:8px}
 button.sec{padding:7px 10px;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;font:inherit;cursor:pointer}
 .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.f.miss>span{color:var(--warn);font-weight:600}.f.miss input,.f.miss select,.f.miss textarea,.f.miss .opts{border-color:var(--warn);box-shadow:0 0 0 1px var(--warn)}.missbadge{margin-left:10px;padding:1px 8px;border-radius:10px;background:var(--warn);color:#fff;font-size:11px;font-weight:600}
 .doc{display:flex;margin:6px 0}.doc.off{color:var(--mut)}.warn{color:var(--warn)} #warn{margin-top:8px;font-size:12px}
 .note{color:var(--mut);font-size:12px;margin-top:12px}
 
@@ -1642,6 +1643,14 @@ window.DOCS=[
   const REQ=['sp_preparer','ct_consult_person','org_addr','org_rep','org_zip','org_tel','wk_name','ct_wage_amt','ct_field','ct_category','ct_wp_name','ct_wp_addr'];
   window.SCHEMA.forEach(g=>g.fields.forEach(f=>{ if(REQ.includes(f.k)) f.req=1; }));
   window.SCHEMA.forEach(g=>g.fields.forEach(f=>{ if(f.k==='sp_mgr_name'){ f.reqIf='self'; } }));
+  /* 書類ごとの必須: reqDocs=その書類を出力する(チェックが入っている)ときだけ必須。when='rso'/'self'=全部委託/自社実施のときだけ。
+     書類のひな形で使われ、空欄のまま出力すると記入欄が白紙になる項目(作成日など、他の入力で自動補完される項目は除く) */
+  const RD=[['conditions',['wk_nat','ct_wage_basis','ct_start_h','ct_end_h','ct_break','ct_renewal','ct_pay_method','ct_pay1','ct_close1','ct_consult_dept','ct_consult_contact','ct_rules_place','ct_wp_type','ct_leave_days','ct_ins']],
+    ['contract',['wk_nat']],['wage',['ct_wage_basis']],
+    ['support',['wk_nat','wk_dob','wk_sex','sp_c_tel','sp_c_m']],['pledge',['wk_nat','wk_dob','wk_sex']]];
+  const RDS=[['support','self',['sp_mgr_title','sp_count','sp_staff_count']],
+    ['support','rso',['rso_name','rso_zip','rso_addr','rso_tel','rso_rep','rso_mgr_name','rso_mgr_title','rso_date','rso_count','rso_staff_count']]];
+  window.SCHEMA.forEach(g=>g.fields.forEach(f=>{ RD.forEach(([doc,ks])=>{ if(ks.includes(f.k)){ (f.reqDocs=f.reqDocs||[]).push({doc}); } }); RDS.forEach(([doc,when,ks])=>{ if(ks.includes(f.k)) (f.reqDocs=f.reqDocs||[]).push({doc,when}); }); }));
   const spi=window.SCHEMA.find(g=>g.id==='spi'); if(spi) spi.title='詳細設定(通常は入力不要) '+spi.title;
 })();
 
@@ -1694,7 +1703,7 @@ window.DOCS=[
   const NOT=/^(sp_out|sp_ta_|sp_tb_|sp_plan_date|sp_preparer)/;      /* 実施体制の選択・第三者委託先・実施予定日・作成責任者は所属機関側のまま */
   const MV=/^sp_e_name(_en|_ne)?$/;                                   /* 移す(複製ではなく) */
   const rsd={id:'rso2',src:'rso',title:'登録支援機関の支援体制・支援内容の詳細(「全部委託」のとき1号支援計画書 Ⅳ欄に反映。空欄の項目は所属機関側の入力を使用)',scope:'org',fields:[]};
-  sp2.fields.forEach(f=>{ if(NOT.test(f.k)) return; rsd.fields.push(Object.assign({},f,{k:'rs_'+f.k.slice(3)})); });
+  sp2.fields.forEach(f=>{ if(NOT.test(f.k)) return; rsd.fields.push(Object.assign({},f,{k:'rs_'+f.k.slice(3),reqDocs:undefined})); });
   sp2.fields=sp2.fields.filter(f=>!MV.test(f.k));
   rsd.fields.forEach(f=>{ if(f.k==='rs_e_name'){ f.reqIf='rso'; } });
   /* 支援体制(責任者・人数)は登録支援機関側にすでに rso_mgr_* / rso_count / rso_staff_count がある */
@@ -1841,7 +1850,7 @@ function load(){ let s=null; try{ s=localStorage.getItem(KEY2); }catch(e){}
 function fieldEl(f,ent){
   const scope=ent.name; const store=()=>ent.data();
   const wrap=document.createElement('label'); wrap.className='f w'+(f.w||2); wrap.dataset.k=f.k; if(f.h) wrap.title=f.h; 
-  const span=document.createElement('span'); span.textContent=f.l+(f.req||f.reqIf?' *':''); wrap.appendChild(span);
+  const span=document.createElement('span'); span.textContent=f.l+(f.req||f.reqIf||f.reqDocs?' *':''); wrap.appendChild(span);
   const val=store()[f.k];
   const set=v=>{store()[f.k]=v; ent.save(); if(window.IMMI&&IMMI.PAR.indexOf(f.k)>=0){ SCHEMA.forEach(g=>g.fields.forEach(x=>{ if(x.pk===f.k) store()[x.k]=''; })); ent.save(); renderForm(); } if(f.k==='wk_nat'||f.k==='wk_lang'||f.k==='wk_name'||f.k==='org_name'||f.k==='rso_name') renderTop(); if(f.k==='sp_rent_on'){ if(v==='no') store().sp_rent_amt=''; renderForm(); } renderOut();};
   let el;
@@ -1935,7 +1944,7 @@ function renderOut(){
   const d=merged(), lang=d.wk_lang||'en', c=natInfo(d.wk_nat);
   const info=$('#langinfo'); info.innerHTML='書類の言語: <b>'+LANGS[lang]+'</b>'+(c[2]&&lang==='en'?' <span class="warn">('+d.wk_nat+'語版は未搭載のため英語版で代替)</span>':'');
   const box=$('#docs'); box.innerHTML='';
-  DOCS.forEach(doc=>{ const ok=!!templateFor(doc.id,lang); const l=document.createElement('label'); l.className='opt doc'+(ok?'':' off'); const i=document.createElement('input'); i.type='checkbox'; i.checked=ok&&(sel[doc.id]!==false); i.disabled=!ok; i.onchange=()=>{sel[doc.id]=i.checked;}; l.append(i,' '+doc.name+(ok?'':'  ※'+LANGS[lang]+'版の様式ファイルが未取り込みです')); box.appendChild(l); });
+  DOCS.forEach(doc=>{ const ok=!!templateFor(doc.id,lang); const l=document.createElement('label'); l.className='opt doc'+(ok?'':' off'); const i=document.createElement('input'); i.type='checkbox'; i.checked=ok&&(sel[doc.id]!==false); i.disabled=!ok; i.onchange=()=>{sel[doc.id]=i.checked; renderOut();}; l.append(i,' '+doc.name+(ok?'':'  ※'+LANGS[lang]+'版の様式ファイルが未取り込みです')); box.appendChild(l); });
   /* 提出書類一覧表(Excel): 書類の言語に依存しない(日本語の様式) */
   const dv=Fill.derive(Object.assign({},d));   /* 作成責任者など、選択から決まる値は計算後の値で確認する */
   const xwarn=[]; { const h=document.createElement('div'); h.className='note'; h.style.margin='10px 0 4px'; h.textContent='提出書類一覧表(Excel・日本語)'; box.appendChild(h);
@@ -1950,7 +1959,11 @@ function renderOut(){
     if(!/農業/.test(d.ct_field||'')) xwarn.push('登録支援機関誓約書: 様式は農業分野用です('+J('分野','ct_field')+'が「農業」になっていません)'); }
   if(sel.wage!==false&&templateFor('wage',lang)&&(dv.ct_wage_basis==='daily'||dv.ct_wage_basis==='hourly')&&!String(dv.ct_monthly_equiv||'').trim())
     xwarn.push('賃金の支払: '+(dv.ct_wage_basis==='daily'?'日給':'時給')+'のため、'+J('1か月当たり金額','ct_monthly_equiv')+'を入力してください(1か月当たり支払概算額・手取支給額の自動計算に使います。未入力の間は両方とも空欄になります)');
-  const miss=[]; SCHEMA.forEach(g=>g.fields.forEach(f=>{ if((f.req||(f.reqIf==='rso'&&d.sp_out==='rso')||(f.reqIf==='self'&&d.sp_out!=='rso')) && !String((f.k==='sp_preparer'?dv.sp_preparer:d[f.k])||'').trim()) miss.push(J(f.l,f.k==='sp_preparer'?(dv.sp_preparer_sel?dv.sp_preparer_key:'sp_preparer'):f.k)); }));
+  const miss=[], missK=new Set(); const docOn=id=>!!templateFor(id,lang)&&sel[id]!==false;
+  SCHEMA.forEach(g=>g.fields.forEach(f=>{ const need=f.req||(f.reqIf==='rso'&&d.sp_out==='rso')||(f.reqIf==='self'&&d.sp_out!=='rso')||(f.reqDocs&&f.reqDocs.some(r=>docOn(r.doc)&&(!r.when||(r.when==='rso')===(d.sp_out==='rso'))));
+    const v=f.k==='sp_preparer'?dv.sp_preparer:d[f.k]; const empty=Array.isArray(v)?!v.length:!String(v||'').trim();
+    if(need&&empty&&!missK.has(f.k)){ const kk=f.k==='sp_preparer'?(dv.sp_preparer_sel?dv.sp_preparer_key:'sp_preparer'):f.k; missK.add(f.k); missK.add(kk); miss.push(J(f.l,kk)); } }));
+  markMiss(missK);
   { const need=lang==='ne'?[['org_name','受入機関名の外国語/ネパール語表記'],['org_addr','所在地の外国語/ネパール語表記'],['org_rep','代表者の外国語/ネパール語表記']]:[['org_name','受入機関名の外国語表記'],['org_addr','所在地の外国語表記'],['org_rep','代表者の外国語表記']];
     need.push(['sp_preparer','作成責任者の外国語表記']);
     if(d.sp_out==='rso') need.push(['sp_e_name','登録支援機関の支援担当者の外国語表記'],['rso_name','登録支援機関名の外国語表記'],['rso_rep','登録支援機関代表者の外国語表記'],['rso_mgr_name','登録支援機関の支援責任者の外国語表記']);
@@ -1964,6 +1977,13 @@ function renderOut(){
   $('#warn').innerHTML=(miss.length?'<span class="warn">未入力(必須): '+miss.join(' / ')+'</span>':'')+(xwarn.length?'<div class="warn" style="margin-top:6px">'+xwarn.join('<br>')+'</div>':'');
 }
 const sel={}; 
+/* マスタ画面で、必須なのに未入力の欄を赤く表示し、グループ見出しに未入力の件数を出す */
+function markMiss(ks){
+  $$('#form label.f.miss').forEach(e=>e.classList.remove('miss'));
+  ks.forEach(k=>{ const e=document.querySelector('#form [data-k="'+k+'"]'); if(e) e.classList.add('miss'); });
+  $$('#form details').forEach(det=>{ const sm=det.querySelector('summary'); if(!sm) return; const n=det.querySelectorAll('label.f.miss').length; let b=sm.querySelector('.missbadge');
+    if(n){ if(!b){ b=document.createElement('span'); b.className='missbadge'; sm.appendChild(b); } b.textContent='未入力 '+n; } else if(b) b.remove(); });
+}
 let lastCur=null;
 function renderRosterUI(lang){
   if(lastCur!==S.cur){ rosterSel.clear(); lastCur=S.cur; }
