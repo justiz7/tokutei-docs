@@ -400,9 +400,11 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   function trDept1(v,li){
     let t=String(v).replace(/[\s　]+/g,''), suf=null;
     const sk=Object.keys(DS).sort((a,b)=>b.length-a.length); for(const k of sk){ if(t.endsWith(k)&&t.length>k.length){ suf=k; t=t.slice(0,-k.length); break; } }
-    if(!suf) return null; const wk=Object.keys(DW).sort((a,b)=>b.length-a.length); const ws=[];
+    const wk=Object.keys(DW).sort((a,b)=>b.length-a.length); const ws=[];
     while(t){ const k=wk.find(x=>t.startsWith(x)); if(!k) return null; ws.push(DW[k][li]); t=t.slice(k.length); }
-    if(!ws.length) return null; const w=ws.join(' '), sx=DS[suf][li];
+    if(!ws.length) return null;
+    if(!suf) return ws.join([' and ',' dan ',' तथा '][li]);   /* 「総務」「人事」など、部・課などの語尾が無い部署名は、部署の語だけを訳す */
+    const w=ws.join(' '), sx=DS[suf][li];
     return li===1?sx+' '+w:w+' '+sx; }
   function trFree(v,lang,extra){
     v=String(v==null?'':v).trim(); if(!v) return '';
