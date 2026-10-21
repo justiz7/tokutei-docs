@@ -59,7 +59,7 @@ fieldset.mk{border:1px solid var(--line);border-radius:8px;margin:8px 0;padding:
 #pv{display:none;position:fixed;z-index:30;top:0;right:0;bottom:0;width:min(580px,46vw);background:var(--card,#fff);border-left:1px solid var(--line,#ccd);box-shadow:-4px 0 12px rgba(0,0,0,.12);flex-direction:column}
 body.pvon #pv{display:flex}body.pvon{padding-right:min(580px,46vw)}
 #pv .ph{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line,#ccd)}
-#pv .ph b{font-size:13px}#pv .ph button{padding:4px 8px;font-size:12px}#pv .ph button.on{background:#1f4e8c;color:#fff}
+#pv .ph b{font-size:13px}#pv .ph button{padding:4px 8px;font-size:12px}#pv .ph button.on{background:#1f4e8c;color:#fff}#pv .ph button.off{opacity:.5}
 #pv .pst{font-size:11px;color:var(--mut);padding:4px 10px;min-height:16px}
 #pvb{flex:1;overflow:auto;background:#8a8f98;padding:8px}#pvb .docx-wrapper{background:transparent!important;padding:0!important}
 #pvb section.docx{margin:0 auto 8px!important;box-shadow:0 0 4px rgba(0,0,0,.4)}
@@ -2281,11 +2281,11 @@ function migrateSpE(){ Object.values(S.orgs).forEach(o=>{ const r=o.link&&S.rsos
     ks.forEach(k=>{ delete o.data[k]; }); touch('org',o); }); }
 function renderAll(){ migrateSpE(); ensureW(); renderTop(); renderScope(); renderForm(); renderOut(); renderImx(); }
 
-/* ---------- 書類プレビュー(試作): 右側に書類の出力を表示し、マスタの項目を選ぶと、その値が入る段落を黄色で強調する ----------
-   強調の求め方: 項目の値を別の値に変えた書類と比べ、変わった段落を探す(段落単位)。描画は docx-preview(ブラウザ内)。見た目は Word と一致しない。 */
+/* ---------- 書類プレビュー(試作): 右側に書類の出力を表示し、マスタの項目を選ぶと、その値が入る箇所を黄色で強調する ----------
+   強調の求め方: 項目の値を別の値に変えた出力と比べ、変わった所(Word=段落、Excel=セル・○)を探す。
+   Word は docx-preview(ブラウザ内)で描画、Excel は下の XP(簡易描画)で描画する。見た目は Word・Excel と一致しない。 */
 const PV={on:false,doc:null,key:null,tok:0,timer:null};
 const PVNOISE=x=>x.replace(/ w:rsid\w*="[^"]*"/g,'').replace(/ w14:(paraId|textId)="[^"]*"/g,'').replace(/ relativeHeight="\d+"/g,'').replace(/(<wp:docPr id=")\d+/g,'$1').replace(/ name="circle\d+"/g,'');
-function pvDocs(){ const lang=merged().wk_lang||'en'; return DOCS.filter(d=>sel[d.id]!==false&&templateFor(d.id,lang)); }
 function pvAlt(f,cur){
   const t=f.t;
   if(t==='radio'||t==='sel'){ const o=(f.o||[]).map(x=>x[0]).filter(v=>v!==''&&v!==(cur||'')); return o.length?o[0]:undefined; }
@@ -2297,45 +2297,142 @@ function pvAlt(f,cur){
   if(t==='nat'||t==='lang'||t==='dsel') return undefined;
   return (cur==null?'':String(cur))+'◆';
 }
-async function pvBytes(doc,dd){
-  const lang=dd.wk_lang||'en', rs=rosterList(), ros=rs.length>1; let d2=dd;
-  if(ros&&doc.roster){ const ivs=new Set(rs.map(x=>x.data.wk_iv||'')); d2=Object.assign({},dd,{roster_n:rs.length,wk_iv:ivs.size===1?[...ivs][0]:''}); }
-  return Fill.render(JSZip,b64(templateFor(doc.id,lang)),d2);
+/* ---- xlsx を HTML に描画する簡易描画(プレビュー用。1枚目のシートのセル・罫線・結合・○や枠の図形だけ。画像は描かない) ---- */
+const XP=(()=>{
+  const NS=(el,n)=>el?[...el.getElementsByTagNameNS('*',n)]:[], at=(e,n)=>e&&e.getAttribute(n);
+  const THEME=['#ffffff','#000000','#e7e6e6','#44546a','#4472c4','#ed7d31','#a5a5a5','#ffc000','#5b9bd5','#70ad47'], IDX={8:'#000000',9:'#ffffff',10:'#ff0000',12:'#0000ff',64:'#000000'};
+  const colr=(c,d)=>{ if(!c) return d; const r=at(c,'rgb'); if(r) return '#'+r.slice(-6); const t=at(c,'theme'); if(t!=null) return THEME[+t]||d; const i=at(c,'indexed'); if(i!=null) return IDX[i]||d; return d; };
+  const cidx=s=>{ let n=0; for(const ch of s) n=n*26+ch.charCodeAt(0)-64; return n-1; };
+  const ref=s=>{ const m=/^([A-Z]+)(\d+)$/.exec(s); return m?[+m[2]-1,cidx(m[1])]:null; };
+  const kids=(e,n)=>e?[...e.children].filter(c=>c.localName===n):[];
+  const txt=e=>NS(e,'t').filter(t=>!t.closest||!t.closest('rPh')).map(t=>t.textContent).join('');
+  const BS={thin:[1,'solid'],medium:[2,'solid'],thick:[3,'solid'],hair:[1,'dotted'],dotted:[1,'dotted'],dashed:[1,'dashed'],double:[3,'double'],mediumDashed:[2,'dashed'],dashDot:[1,'dashed'],slantDashDot:[2,'dashed'],mediumDashDot:[2,'dashed'],mediumDashDotDot:[2,'dashed'],dashDotDot:[1,'dashed']};
+  const EMU=9525;
+  async function parse(bytes){
+    const z=await JSZip.loadAsync(bytes), P=s=>new DOMParser().parseFromString(s,'application/xml');
+    const rd=async n=>{ const f=z.file(n); return f?P(await f.async('string')):null; };
+    const wb=await rd('xl/workbook.xml'), rel=await rd('xl/_rels/workbook.xml.rels');
+    const sh0=NS(wb,'sheet')[0], rid=sh0.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
+    const rl=NS(rel,'Relationship').find(r=>at(r,'Id')===rid); const spath='xl/'+at(rl,'Target').replace(/^\/?(xl\/)?/,'');
+    const sheet=await rd(spath), sstD=await rd('xl/sharedStrings.xml'), stD=await rd('xl/styles.xml');
+    const sst=NS(sstD,'si').map(si=>{ const runs=[]; for(const c of si.children){ if(c.localName==='t') runs.push({t:c.textContent}); else if(c.localName==='r'){ const rp=kids(c,'rPr')[0]; runs.push({t:txt(c),b:!!(rp&&kids(rp,'b').length),c:rp&&kids(rp,'color')[0]?colr(kids(rp,'color')[0],null):null,sz:rp&&kids(rp,'sz')[0]?+at(kids(rp,'sz')[0],'val'):null}); } } return runs; });
+    const fonts=kids(NS(stD,'fonts')[0],'font').map(f=>({b:!!kids(f,'b').length,i:!!kids(f,'i').length,u:!!kids(f,'u').length,sz:+at(kids(f,'sz')[0],'val')||11,c:colr(kids(f,'color')[0],'#000000'),n:at(kids(f,'name')[0],'val')}));
+    const fills=kids(NS(stD,'fills')[0],'fill').map(f=>{ const p=kids(f,'patternFill')[0]; return p&&at(p,'patternType')==='solid'?colr(kids(p,'fgColor')[0],null):null; });
+    const borders=kids(NS(stD,'borders')[0],'border').map(b=>{ const o={}; for(const s of ['left','right','top','bottom']){ const e=kids(b,s)[0]; o[s]=e&&at(e,'style')?{st:at(e,'style'),c:colr(kids(e,'color')[0],'#000000')}:null; } return o; });
+    const xfs=kids(NS(stD,'cellXfs')[0],'xf').map(x=>{ const a=kids(x,'alignment')[0]; return {f:+at(x,'fontId')||0,fl:+at(x,'fillId')||0,b:+at(x,'borderId')||0,h:a&&at(a,'horizontal'),v:a&&at(a,'vertical'),w:a&&at(a,'wrapText')==='1',sh:a&&at(a,'shrinkToFit')==='1',ind:a&&+at(a,'indent')||0}; });
+    const fmt=NS(sheet,'sheetFormatPr')[0]; const dcw=+at(fmt,'defaultColWidth')||8.43, drh=+at(fmt,'defaultRowHeight')||15;
+    const colDefs={}; NS(sheet,'col').forEach(c=>{ for(let i=+at(c,'min')-1;i<=Math.min(+at(c,'max')-1,60);i++) colDefs[i]={w:+at(c,'width'),h:at(c,'hidden')==='1'}; });
+    const cells=new Map(), rowDefs={}; let maxR=0,maxC=0;
+    NS(sheet,'row').forEach(r=>{ const ri=+at(r,'r')-1; rowDefs[ri]={h:at(r,'ht')?+at(r,'ht'):drh,hid:at(r,'hidden')==='1'}; maxR=Math.max(maxR,ri);
+      kids(r,'c').forEach(c=>{ const p=ref(at(c,'r')); if(!p) return; const t=at(c,'t'); let runs=null; const v=kids(c,'v')[0];
+        if(t==='s'&&v) runs=sst[+v.textContent]; else if(t==='inlineStr'){ const is=kids(c,'is')[0]; runs=[{t:txt(is)}]; } else if(v) runs=[{t:v.textContent}];
+        cells.set(p[0]+','+p[1],{s:+at(c,'s')||0,runs}); maxR=Math.max(maxR,p[0]); maxC=Math.max(maxC,p[1]); }); });
+    const merges=NS(sheet,'mergeCell').map(m=>{ const [a,b]=at(m,'ref').split(':'); const A=ref(a),B=ref(b||a); maxR=Math.max(maxR,B[0]); maxC=Math.max(maxC,B[1]); return {r1:A[0],c1:A[1],r2:B[0],c2:B[1]}; });
+    const colW=[],rowH=[]; for(let c=0;c<=maxC;c++){ const d=colDefs[c]; colW.push(d&&d.h?0:Math.round((d?d.w:dcw)*7.6+3)); } for(let r=0;r<=maxR;r++){ const d=rowDefs[r]; rowH.push(d&&d.hid?0:Math.round((d?d.h:drh)*4/3)); }
+    const X=[0],Y=[0]; colW.forEach(w=>X.push(X[X.length-1]+w)); rowH.forEach(h=>Y.push(Y[Y.length-1]+h));
+    const shapes=[]; const dn=NS(sheet,'drawing')[0];
+    if(dn){ const drid=dn.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id'); const sr=await rd(spath.replace('worksheets/','worksheets/_rels/')+'.rels'); const dr=NS(sr,'Relationship').find(r=>at(r,'Id')===drid);
+      if(dr){ const dp='xl/'+at(dr,'Target').replace(/^\.\.\//,'').replace(/^\/?(xl\/)?/,''); const dd=await rd(dp);
+        if(dd) for(const a of dd.documentElement.children){ const ln=a.localName; if(!/Anchor$/.test(ln)) continue; const sp=kids(a,'sp')[0]; if(!sp) continue;
+          const pos=(e)=>{ const col=+kids(e,'col')[0].textContent,co=+kids(e,'colOff')[0].textContent,row=+kids(e,'row')[0].textContent,ro=+kids(e,'rowOff')[0].textContent; return [(X[Math.min(col,X.length-1)]||0)+co/EMU,(Y[Math.min(row,Y.length-1)]||0)+ro/EMU]; };
+          let x,y,w,h; if(ln==='oneCellAnchor'){ [x,y]=pos(kids(a,'from')[0]); const e=kids(a,'ext')[0]; w=+at(e,'cx')/EMU; h=+at(e,'cy')/EMU; } else if(ln==='twoCellAnchor'){ [x,y]=pos(kids(a,'from')[0]); const [x2,y2]=pos(kids(a,'to')[0]); w=x2-x; h=y2-y; } else { const p=kids(a,'pos')[0],e=kids(a,'ext')[0]; x=+at(p,'x')/EMU; y=+at(p,'y')/EMU; w=+at(e,'cx')/EMU; h=+at(e,'cy')/EMU; }
+          const spPr=kids(sp,'spPr')[0]; const geom=NS(spPr,'prstGeom')[0]; const prst=geom?at(geom,'prst'):'rect';
+          const sc=e=>{ const s=kids(e,'srgbClr')[0]; if(s) return '#'+at(s,'val'); const t=kids(e,'schemeClr')[0]; if(t){ const v=at(t,'val'); return v==='lt1'||v==='bg1'?'#ffffff':v==='dk1'||v==='tx1'?'#000000':'#888888'; } return null; };
+          const sf=kids(spPr,'solidFill')[0]; const lnE=kids(spPr,'ln')[0]; const lsf=lnE&&kids(lnE,'solidFill')[0];
+          const body=kids(sp,'txBody')[0]; const bp=body&&kids(body,'bodyPr')[0];
+          const paras=body?kids(body,'p').map(p=>{ const pp=kids(p,'pPr')[0]; const runs=[]; for(const c of p.children){ if(c.localName==='r'){ const rp=kids(c,'rPr')[0]; const rf=rp&&kids(rp,'solidFill')[0]; runs.push({t:txt(c),sz:rp&&at(rp,'sz')?+at(rp,'sz')/100:null,b:rp&&at(rp,'b')==='1',c:rf?sc(rf):null}); } else if(c.localName==='br') runs.push({t:'\n'}); } return {al:pp&&at(pp,'algn'),runs}; }):[];
+          shapes.push({prst,x,y,w,h,fill:sf?sc(sf):null,lc:lsf?sc(lsf):null,lw:lnE&&at(lnE,'w')?Math.max(1,+at(lnE,'w')/EMU):(lsf?1:0),paras,ins:bp?[+at(bp,'lIns')||91440,+at(bp,'tIns')||45720,+at(bp,'rIns')||91440,+at(bp,'bIns')||45720].map(v=>v/EMU):[9.6,4.8,9.6,4.8],anc:bp&&at(bp,'anchor')||'t'}); } } }
+    return {cells,merges,colW,rowH,X,Y,fonts,fills,borders,xfs,sst,shapes};
+  }
+  const ctext=c=>c&&c.runs?c.runs.map(r=>r.t).join(''):'';
+  const sig=s=>s.prst+'|'+Math.round(s.x)+','+Math.round(s.y)+','+Math.round(s.w)+','+Math.round(s.h)+'|'+s.paras.map(p=>p.runs.map(r=>r.t).join('')).join('/');
+  function region(m,r,c){ for(const g of m.merges) if(r>=g.r1&&r<=g.r2&&c>=g.c1&&c<=g.c2) return g; return {r1:r,c1:c,r2:r,c2:c}; }
+  const rectOf=(m,g)=>({x:m.X[g.c1],y:m.Y[g.r1],w:m.X[g.c2+1]-m.X[g.c1],h:m.Y[g.r2+1]-m.Y[g.r1]});
+  /* 2つの出力を比べ、変わったセル・○(図形)の位置を返す */
+  function diff(a,b){ const out=[]; const keys=new Set([...a.cells.keys(),...b.cells.keys()]);
+    for(const k of keys){ if(ctext(a.cells.get(k))!==ctext(b.cells.get(k))){ const [r,c]=k.split(',').map(Number); out.push(rectOf(a,region(a,r,c))); } }
+    const cnt=new Map(); a.shapes.forEach(s=>cnt.set(sig(s),(cnt.get(sig(s))||0)+1)); const only=[];
+    b.shapes.forEach(s=>{ const k=sig(s); if(cnt.get(k)>0) cnt.set(k,cnt.get(k)-1); else only.push(s); });
+    const used=new Map(); b.shapes.forEach(s=>used.set(sig(s),(used.get(sig(s))||0)+1)); const cnt2=new Map(); a.shapes.forEach(s=>cnt2.set(sig(s),(cnt2.get(sig(s))||0)+1));
+    a.shapes.forEach(s=>{ const k=sig(s); if(used.get(k)>0) used.set(k,used.get(k)-1); else out.push({x:s.x-3,y:s.y-3,w:s.w+6,h:s.h+6}); });
+    only.forEach(s=>out.push({x:s.x-3,y:s.y-3,w:s.w+6,h:s.h+6}));
+    const seen=new Set(); return out.filter(r=>{ const k=[r.x,r.y,r.w,r.h].map(Math.round).join(','); if(seen.has(k)) return false; seen.add(k); return true; }); }
+  const css=(e,o)=>Object.assign(e.style,o);
+  function build(m,hl){
+    const root=document.createElement('div'); css(root,{position:'relative',width:Math.max(m.X[m.X.length-1],...m.shapes.map(s=>s.x+s.w))+'px',height:m.Y[m.Y.length-1]+'px',background:'#fff',fontFamily:'Meiryo,"Yu Gothic","Hiragino Sans",sans-serif'});
+    const skip=new Set(); m.merges.forEach(g=>{ for(let r=g.r1;r<=g.r2;r++) for(let c=g.c1;c<=g.c2;c++) if(r!==g.r1||c!==g.c1) skip.add(r+','+c); });
+    const bd=(r,c)=>{ const cell=m.cells.get(r+','+c); return cell?m.borders[m.xfs[cell.s]?m.xfs[cell.s].b:0]:null; };
+    const bcss=(b)=>{ if(!b) return ''; const [w,st]=BS[b.st]||[1,'solid']; return w+'px '+st+' '+b.c; };
+    for(const [k,cell] of m.cells){ if(skip.has(k)) continue; const [r,c]=k.split(',').map(Number); const g=region(m,r,c); const rc=rectOf(m,g); if(rc.w<=0||rc.h<=0) continue;
+      const xf=m.xfs[cell.s]||{}, fo=m.fonts[xf.f]||{}, fi=m.fills[xf.fl], text=ctext(cell);
+      const bl=(bd(g.r1,g.c1)||{}).left||(bd(g.r2,g.c1)||{}).left, bt=(bd(g.r1,g.c1)||{}).top, br=(bd(g.r1,g.c2)||bd(g.r1,g.c1)||{}).right, bb=(bd(g.r2,g.c1)||bd(g.r1,g.c1)||{}).bottom;
+      if(!text&&!fi&&!bl&&!bt&&!br&&!bb) continue;
+      const d=document.createElement('div'); css(d,{position:'absolute',left:rc.x+'px',top:rc.y+'px',width:rc.w+'px',height:rc.h+'px',boxSizing:'border-box',display:'flex',alignItems:xf.v==='center'?'center':xf.v==='top'?'flex-start':'flex-end',justifyContent:xf.h==='center'||xf.h==='centerContinuous'?'center':xf.h==='right'?'flex-end':'flex-start',background:fi||'transparent',borderLeft:bcss(bl),borderTop:bcss(bt),borderRight:bcss(br),borderBottom:bcss(bb),overflow:xf.w||xf.sh?'hidden':'visible',paddingLeft:(1+xf.ind*8)+'px',paddingRight:'1px'});
+      if(text){ const sp=document.createElement('span'); const fs=(fo.sz||11)*4/3; css(sp,{fontSize:fs+'px',lineHeight:'1.25',whiteSpace:xf.w?'pre-wrap':'pre',textAlign:xf.h==='center'?'center':xf.h==='right'?'right':'left',maxWidth:xf.w?'100%':'none',fontWeight:fo.b?'700':'400',fontStyle:fo.i?'italic':'normal',textDecoration:fo.u?'underline':'none',color:fo.c||'#000'});
+        cell.runs.forEach(rn=>{ const s=document.createElement('span'); s.textContent=rn.t; if(rn.b) s.style.fontWeight='700'; if(rn.c) s.style.color=rn.c; if(rn.sz) s.style.fontSize=(rn.sz*4/3)+'px'; sp.appendChild(s); }); d.appendChild(sp);
+        if(xf.sh) d.dataset.shrink='1'; }
+      root.appendChild(d); }
+    m.shapes.forEach(s=>{ const d=document.createElement('div'); css(d,{position:'absolute',left:s.x+'px',top:s.y+'px',width:s.w+'px',height:s.h+'px',boxSizing:'border-box',background:s.fill||'transparent',border:s.lw?s.lw+'px solid '+(s.lc||'#000'):'none',borderRadius:s.prst==='ellipse'?'50%':'0',overflow:'hidden',display:'flex',flexDirection:'column',justifyContent:s.anc==='ctr'?'center':s.anc==='b'?'flex-end':'flex-start',padding:s.ins[1]+'px '+s.ins[2]+'px '+s.ins[3]+'px '+s.ins[0]+'px',pointerEvents:'none'});
+      s.paras.forEach(p=>{ const e=document.createElement('div'); css(e,{textAlign:p.al==='ctr'?'center':p.al==='r'?'right':'left',whiteSpace:'pre-wrap',lineHeight:'1.3',minHeight:'1em'}); p.runs.forEach(rn=>{ const sp=document.createElement('span'); sp.textContent=rn.t; css(sp,{fontSize:((rn.sz||11)*4/3)+'px',fontWeight:rn.b?'700':'400',color:rn.c||'#000'}); e.appendChild(sp); }); d.appendChild(e); }); root.appendChild(d); });
+    (hl||[]).forEach(r=>{ const d=document.createElement('div'); d.className='pvhl'; css(d,{position:'absolute',left:(r.x-1)+'px',top:(r.y-1)+'px',width:(r.w+2)+'px',height:(r.h+2)+'px',background:'rgba(255,235,59,.55)',outline:'2px solid #f9a825',pointerEvents:'none'}); root.appendChild(d); });
+    return root; }
+  function fit(root){ root.querySelectorAll('[data-shrink]').forEach(d=>{ const sp=d.firstChild; if(sp&&sp.scrollWidth>d.clientWidth&&d.clientWidth>0){ sp.style.fontSize=(parseFloat(sp.style.fontSize)*d.clientWidth/sp.scrollWidth*.95)+'px'; } }); }
+  return {parse,diff,build,fit};
+})();
+/* ---- プレビューの項目(Word 書類+提出書類一覧表(Excel))と描画 ---- */
+const PVXL=['r','e','h'];
+function pvItems(){ const d=merged(), lang=d.wk_lang||'en', n=rosterList().length, out=[];
+  DOCS.forEach(x=>{ if(sel[x.id]!==false&&templateFor(x.id,lang)) out.push({id:x.id,t:'doc',doc:x,name:x.name.replace(/\(.*$/,''),let:DOCLET[x.id]}); });
+  XL.KINDS.forEach(k=>{ if(sel[k.id]===false||k.once) return; let st; try{ st=XL.status(k.kind,d,{rosterN:n}); }catch(e){ st={ok:false,reason:String(e.message||e)}; } if(st.hide) return; out.push({id:k.id,t:'xl',k:k,st:st,name:k.file.replace(/^提出書類一覧表_?/,'Excel '),let:'xl'}); });
+  return out; }
+async function pvBytes(it,dd){
+  if(it.t==='doc'){ const doc=it.doc, lang=dd.wk_lang||'en', rs=rosterList(), ros=rs.length>1; let d2=dd;
+    if(ros&&doc.roster){ const ivs=new Set(rs.map(x=>x.data.wk_iv||'')); d2=Object.assign({},dd,{roster_n:rs.length,wk_iv:ivs.size===1?[...ivs][0]:''}); }
+    return Fill.render(JSZip,b64(templateFor(doc.id,lang)),d2); }
+  return XL.render(JSZip,b64(window.XLTEMPLATES[XL.tplKey(it.k.kind,dd)]),it.k.kind,dd,{rosterN:rosterList().length});
 }
 async function pvXml(bytes){ const z=await JSZip.loadAsync(bytes); return {z,xml:await z.file('word/document.xml').async('string')}; }
+/* 1つの項目について、書類(タブ)ごとの強調を作る。戻り値 {hit,note,out(docx)|model,hl(xlsx)} */
+async function pvBuild(it,key,f,d){
+  if(it.t==='xl'&&!it.st.ok) return {hit:0,note:it.st.reason||'この様式は出力されません',skip:true};
+  const b0=await pvBytes(it,d);
+  if(!key||!f){ return it.t==='doc'?{hit:0,out:b0}:{hit:0,model:await XP.parse(b0),hl:[]}; }
+  const alt=pvAlt(f,d[key]); if(alt===undefined) return {hit:0,out:b0,model:it.t==='xl'?await XP.parse(b0):null,hl:[],note:'この項目は強調できません(箇所の一覧を参照)。'};
+  const d2=Object.assign({},d); d2[key]=alt; if(key.slice(0,3)==='rs_'&&d.sp_out==='rso') d2['sp_'+key.slice(3)]=alt;
+  let b1; try{ b1=await pvBytes(it,d2); }catch(e){ return {hit:0,out:b0,model:it.t==='xl'?await XP.parse(b0):null,hl:[],note:'別の値では出力できないため、強調できません。'}; }
+  if(it.t==='xl'){ const [m0,m1]=await Promise.all([XP.parse(b0),XP.parse(b1)]); const hl=XP.diff(m0,m1); return {hit:hl.length,model:m0,hl,note:hl.length?'':'この様式では、この項目の値は出力に現れません。'}; }
+  const [x0,x1]=await Promise.all([pvXml(b0),pvXml(b1)]); const p0=x0.xml.split('</w:p>'), p1=x1.xml.split('</w:p>'); let hit=0;
+  if(p0.length!==p1.length) return {hit:0,out:b0,note:'段落数が変わるため、位置を特定できません。'};
+  for(let i=0;i<p0.length;i++){ if(PVNOISE(p0[i])===PVNOISE(p1[i])) continue; hit++;
+    p0[i]=p0[i].replace(/<w:r(\s[^>]*)?>(?:(?!<w:r[\s>])[\s\S])*?<\/w:r>/g,m=>{ if(/<w:rPr>/.test(m)) return m.replace('<w:rPr>','<w:rPr><w:highlight w:val="yellow"/>'); return m.replace(/(<w:r(?:\s[^>]*)?>)/,'$1<w:rPr><w:highlight w:val="yellow"/></w:rPr>'); });
+    p0[i]=p0[i].replace(/(<w:p(?:\s[^>]*)?>)(?![\s\S]*<w:p[\s>])/,(m,o)=>o+'<w:pPr><w:shd w:val="clear" w:color="auto" w:fill="FFF59D"/></w:pPr>'); }
+  if(!hit) return {hit:0,out:b0,note:'この書類では、この項目の値は出力に現れません。'};
+  x0.z.file('word/document.xml',p0.join('</w:p>')); return {hit,out:await x0.z.generateAsync({type:'arraybuffer'})};
+}
 async function pvRender(){
-  if(!PV.on) return; const my=++PV.tok; const st=$('#pvst'), host=$('#pvb');
-  const docs=pvDocs(); const tabs=$('#pvtabs'); tabs.innerHTML='';
-  if(!docs.length){ host.innerHTML=''; st.textContent='プレビューできる書類が選ばれていません(Word系の書類を選んでください)。'; return; }
-  const key=PV.key, f=key&&FLD[key]; const lf=key?((window.FLOC||{})[key]||{}):{};
-  if(key&&PV.pref!==PV.doc){ /* 項目に合わせて書類を切り替える */ }
-  let doc=docs.find(d=>d.id===PV.doc)||docs[0];
-  if(key){ const lt=l=>l&&Object.prototype.hasOwnProperty.call(lf,l); if(!lt(DOCLET[doc.id])){ const alt=docs.find(d=>lt(DOCLET[d.id])); if(alt) doc=alt; } }
-  PV.doc=doc.id;
-  docs.forEach(d=>{ const b=document.createElement('button'); b.type='button'; b.className='sec'+(d.id===doc.id?' on':''); b.textContent=d.name.replace(/\(.*$/,''); b.onclick=()=>{ PV.doc=d.id; pvRender(); }; tabs.appendChild(b); });
+  if(!PV.on) return; const my=++PV.tok; const st=$('#pvst'), host=$('#pvb'), tabs=$('#pvtabs');
+  const items=pvItems(); tabs.innerHTML='';
+  if(!items.length){ host.innerHTML=''; st.textContent='プレビューできる書類が選ばれていません。'; return; }
+  const key=PV.key, f=key&&FLD[key], lf=key?((window.FLOC||{})[key]||null):null, d=merged();
+  const rel=it=>!lf||(it.t==='xl'?PVXL.some(l=>Object.prototype.hasOwnProperty.call(lf,l)):Object.prototype.hasOwnProperty.call(lf,it.let));
+  let cur=items.find(i=>i.id===PV.doc)||items[0];
+  const cands=key?[cur,...items.filter(i=>i!==cur)].filter((i,ix)=>ix===0||rel(i)):[cur];
   st.textContent='描画中…';
   try{
-    const t0=performance.now(); const d=merged();
-    const b0=await pvBytes(doc,d); let out=b0, hit=0, note='';
-    if(key&&f){
-      const alt=pvAlt(f,d[key]);
-      if(alt===undefined) note='この項目は強調できません(箇所の一覧を参照)。';
-      else{ const d2=Object.assign({},d); d2[key]=alt; if(key.slice(0,3)==='rs_'&&d.sp_out==='rso') d2['sp_'+key.slice(3)]=alt;
-        const b1=await pvBytes(doc,d2); const [x0,x1]=await Promise.all([pvXml(b0),pvXml(b1)]);
-        const p0=x0.xml.split('</w:p>'), p1=x1.xml.split('</w:p>');
-        if(p0.length!==p1.length) note='段落数が変わるため、位置を特定できません。';
-        else{ for(let i=0;i<p0.length;i++){ if(PVNOISE(p0[i])===PVNOISE(p1[i])) continue; hit++;
-            p0[i]=p0[i].replace(/<w:r(\s[^>]*)?>(?:(?!<w:r[\s>])[\s\S])*?<\/w:r>/g,m=>{ if(/<w:rPr>/.test(m)) return m.replace('<w:rPr>','<w:rPr><w:highlight w:val="yellow"/>'); return m.replace(/(<w:r(?:\s[^>]*)?>)/,'$1<w:rPr><w:highlight w:val="yellow"/></w:rPr>'); });
-            p0[i]=p0[i].replace(/(<w:p(?:\s[^>]*)?>)(?![\s\S]*<w:p[\s>])/,(m,o)=>o+'<w:pPr><w:shd w:val="clear" w:color="auto" w:fill="FFF59D"/></w:pPr>'); }
-          if(hit){ x0.z.file('word/document.xml',p0.join('</w:p>')); out=await x0.z.generateAsync({type:'arraybuffer'}); } else note='この書類では、この項目の値は出力に現れません。'; } } }
-    if(my!==PV.tok) return;
-    host.innerHTML=''; await docx.renderAsync(out,host,null,{inWrapper:true,ignoreWidth:false,breakPages:true,useBase64URL:true,ignoreLastRenderedPageBreak:false});
-    if(my!==PV.tok) return;
-    const pg=host.querySelector('section.docx'); if(pg){ const z=(host.clientWidth-18)/pg.offsetWidth; host.querySelector('.docx-wrapper').style.zoom=Math.min(1.2,Math.max(.3,z)); }
-    const first=hit&&[...host.querySelectorAll('span,p,td')].find(e=>/(255, 245, 157|255, 255, 0|#fff59d|#ffff00)/i.test(e.getAttribute('style')||'')||/yellow/.test(e.style&&e.style.backgroundColor||''));
+    const t0=performance.now(); let res=null, shown=cur;
+    for(const it of cands){ const r=await pvBuild(it,key,f,d); if(my!==PV.tok) return; if(!res&&it===cur){ res=r; shown=it; } if(r.hit>0&&!r.skip){ res=r; shown=it; break; } }
+    PV.doc=shown.id;
+    items.forEach(it=>{ const b=document.createElement('button'); b.type='button'; b.className='sec'+(it.id===shown.id?' on':'')+(it.t==='xl'&&!it.st.ok?' off':''); b.textContent=it.name; b.onclick=()=>{ PV.doc=it.id; pvRender(); }; tabs.appendChild(b); });
+    host.innerHTML='';
+    if(res.skip){ st.textContent=shown.name+': '+res.note; return; }
+    if(shown.t==='doc'){ await docx.renderAsync(res.out,host,null,{inWrapper:true,ignoreWidth:false,breakPages:true,useBase64URL:true,ignoreLastRenderedPageBreak:false});
+      if(my!==PV.tok) return; const pg=host.querySelector('section.docx'); if(pg){ const z=(host.clientWidth-18)/pg.offsetWidth; host.querySelector('.docx-wrapper').style.zoom=Math.min(1.2,Math.max(.3,z)); } }
+    else{ const wrap=document.createElement('div'); wrap.style.cssText='margin:0 auto;box-shadow:0 0 4px rgba(0,0,0,.4);width:max-content'; const root=XP.build(res.model,res.hl); wrap.appendChild(root); host.appendChild(wrap); XP.fit(root);
+      const z=(host.clientWidth-18)/root.offsetWidth; wrap.style.zoom=Math.min(1.4,Math.max(.3,z)); }
+    const first=res.hit?(shown.t==='xl'?host.querySelector('.pvhl'):[...host.querySelectorAll('span,p,td')].find(e=>/(255, 245, 157|255, 255, 0|#fff59d|#ffff00)/i.test(e.getAttribute('style')||'')||/yellow/.test(e.style&&e.style.backgroundColor||''))):null;
     if(first){ const r=first.getBoundingClientRect(), h=host.getBoundingClientRect(); host.scrollTop+=r.top-h.top-h.height/3; }
     const ms=Math.round(performance.now()-t0);
-    st.textContent=(key&&f?'「'+f.l+'」: ':'')+(hit?hit+'か所を強調':note||'項目を選ぶと、その値が入る箇所を黄色で示します。')+'('+ms+'ms'+(hit&&!first?'・強調が見つかりません':'')+')';
+    st.textContent=(key&&f?'「'+f.l+'」: ':'')+(res.hit?(shown.t==='xl'?res.hit+'か所を強調(セル・○)':res.hit+'か所を強調'):res.note||'項目を選ぶと、その値が入る箇所を黄色で示します。')+'('+ms+'ms'+(res.hit&&!first?'・強調が見つかりません':'')+')';
   }catch(e){ if(my===PV.tok) st.textContent='プレビューに失敗しました: '+e.message; console.error(e); }
 }
 function pvLater(ms){ clearTimeout(PV.timer); PV.timer=setTimeout(pvRender,ms); }
@@ -2344,7 +2441,7 @@ $('#pvbtn').onclick=()=>pvOpen(!PV.on); $('#pvx').onclick=()=>pvOpen(false);
 $('#form').addEventListener('focusin',e=>{ const l=e.target.closest&&e.target.closest('label.f[data-k]'); if(!l||!PV.on) return; if(PV.key===l.dataset.k) return; PV.key=l.dataset.k; pvLater(150); });
 $('#form').addEventListener('input',()=>{ if(PV.on) pvLater(700); });
 $('#form').addEventListener('change',()=>{ if(PV.on) pvLater(300); });
-window.PV=PV;
+window.PV=PV; window.XP=XP;
 /* ---------- マスタ記入用紙(Excel)の作成・取り込み ---------- */
 const hx=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const FLD=(()=>{ const m={}; SCHEMA.forEach(g=>g.fields.forEach(f=>{ if(!m[f.k]) m[f.k]=f; })); return m; })();
