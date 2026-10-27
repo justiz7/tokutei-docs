@@ -1678,9 +1678,9 @@ window.DOCS=[
  {id:'contract',name:'雇用契約書(参考様式第1-5号)',sign:'末尾の「乙（特定技能外国人の署名）」欄'},
  {id:'conditions',name:'雇用条件書(参考様式第1-6号)',sign:'末尾の「受取人（署名）」欄'},
  {id:'wage',name:'賃金の支払(参考様式第1-6号 別紙1)',nosign:'雇用条件書の別紙。受領の署名は雇用条件書の欄'},
- {id:'emp',name:'雇用の経緯に係る説明書(参考様式第1-16号)',off:1,signRe:/^\s*(申請人の署名|Signature of the applicant|Tanda tangan pemohon|.*निवेदकको हस्ताक्षर)/,sign:'末尾の「申請人の署名」欄(その上の「４ 自国等の機関に支払った費用」の確認文〔十分に理解した上で支払った・ほかの費用は徴収されていない〕が本人の申告)'},
- {id:'hcdecl',signRe:/^(作成年月日|Prepared on|Tanggal pembuatan|बनाएको दिन|申請人の署名|Signature of the applicant|Tanda tangan pemohon|घोषणा गर्ने मान्छेको हस्ताक्षर)/,name:'受診者の申告書(参考様式第1-3号 別紙)',each:1,sign:'末尾の「作成年月日」と「申請人の署名」欄(作成年月日はマスタに入力があれば印字、空欄なら本人が記入)'},
- {id:'support',name:'1号特定技能外国人支援計画書(参考様式第1-17号)',roster:'1号特定技能外国人支援計画書（参考様式第1-17号）',sign:'末尾の「署名日」と「１号特定技能外国人の署名」欄(その上の「翻訳文の交付を受け…理解しました」「面談方法の希望」の確認文も本人が確認)'},
+ {id:'emp',name:'雇用の経緯に係る説明書(参考様式第1-16号)',apps:['coe','chg'],signRe:/^\s*(申請人の署名|Signature of the applicant|Tanda tangan pemohon|.*निवेदकको हस्ताक्षर)/,sign:'末尾の「申請人の署名」欄(その上の「４ 自国等の機関に支払った費用」の確認文〔十分に理解した上で支払った・ほかの費用は徴収されていない〕が本人の申告)'},
+ {id:'hcdecl',apps:['coe','chg'],signRe:/^(作成年月日|Prepared on|Tanggal pembuatan|बनाएको दिन|申請人の署名|Signature of the applicant|Tanda tangan pemohon|घोषणा गर्ने मान्छेको हस्ताक्षर)/,name:'受診者の申告書(参考様式第1-3号 別紙)',each:1,sign:'末尾の「作成年月日」と「申請人の署名」欄(作成年月日はマスタに入力があれば印字、空欄なら本人が記入)'},
+ {id:'support',name:'1号特定技能外国人支援計画書(参考様式第1-17号)',roster:'1号特定技能外国人支援計画書（参考様式第1-17号）',apps:['coe','chg'],sign:'末尾の「署名日」と「１号特定技能外国人の署名」欄(その上の「翻訳文の交付を受け…理解しました」「面談方法の希望」の確認文も本人が確認)'},
  {id:'pledge',name:'登録支援機関誓約書(分野参考様式第11-4号・農業分野・日本語のみ)',roster:'登録支援機関誓約書（分野参考様式第11-4号）',nosign:'登録支援機関が作成'},
 ];
 
@@ -1978,7 +1978,15 @@ function locEl(f,g,act){
 const DOCLET={contract:'c',conditions:'d',wage:'w',emp:'g',hcdecl:'k',support:'s',pledge:'p'};
 function scTgt(kind){ if(kind==='rso'){ if(SC.tgt.rso!==null) return !!SC.tgt.rso; const o=curOrg(); return !!(o&&(o.data.sp_out==='rso'||o.link)); } return SC.tgt[kind]!==false; }
 function xlOn(){ return XL.KINDS.some(k=>sel[k.id]!==false); }
-function scActive(){ const t=(curW()&&curW().data.ap_type)||'renew'; let s=''; DOCS.forEach(d=>{ if(sel[d.id]!==false) s+=DOCLET[d.id]||''; }); if(xlOn()) s+={renew:'r',coe:'e',chg:'h'}[t]||'r'; if(SC.imm) s+='i'; return s; }
+/* 申請の種類などから、その書類が必要かを決める(提出書類一覧表の表紙・第1表・第3表の記載による)。不要な書類は「作成する書類」「書類の出力」に出さない */
+const APN={renew:'在留期間更新',coe:'在留資格認定証明書交付',chg:'在留資格変更許可'};
+function docUse(doc,d){ d=d||merged(); const t=d.ap_type||'renew', yes=v=>v==='yes';
+  if(doc.apps&&doc.apps.indexOf(t)<0) return {ok:false,why:APN[t]+'申請では提出書類に含まれない'};
+  if(doc.id==='emp'&&(yes(d.ap_fy)||yes(d.ap_fy2)||(Array.isArray(d.ap_big)&&d.ap_big.length))) return {ok:false,why:'同一年度内の受入れ済み・一定の実績がある機関は省略可'};
+  if(doc.id==='pledge'&&d.sp_out!=='rso') return {ok:false,why:'登録支援機関に全部委託する場合のみ必要'};
+  return {ok:true}; }
+const docOnF=(doc,d)=>sel[doc.id]!==false&&docUse(doc,d).ok;
+function scActive(){ const t=(curW()&&curW().data.ap_type)||'renew'; let s=''; const md=merged(); DOCS.forEach(d=>{ if(docOnF(d,md)) s+=DOCLET[d.id]||''; }); if(xlOn()) s+={renew:'r',coe:'e',chg:'h'}[t]||'r'; if(SC.imm) s+='i'; return s; }
 function fieldUse(f,g){ if(/^im_/.test(g.id)) return 'i'; const u=FUSE[f.k]; if(u!==undefined) return u; if(/^ap[odn]_/.test(f.k)) return 'reh'; return GDEF[g.id]||'cdwsprehi'; }
 function fieldVisible(f,g,act){ if(SC.all||forceShow.has(f.k)) return true; const u=fieldUse(f,g); for(const c of u) if(act.indexOf(c)>=0) return true; return false; }
 function renderScope(){
@@ -1987,7 +1995,7 @@ function renderScope(){
   host.innerHTML='<h2>最初に選ぶ: 入力する内容</h2>'+
    '<div class="brow"><b>入力する対象</b>'+['wk','org','rso'].map(k=>'<label class="opt"><input type="checkbox" data-sc="t_'+k+'"'+(scTgt(k)?' checked':'')+'> '+L[k]+'</label>').join('')+'</div>'+
    '<div class="brow"><b>申請の種類</b><select id="sc_type"><option value="renew">在留期間更新許可申請</option><option value="coe">在留資格認定証明書交付申請</option><option value="chg">在留資格変更許可申請</option></select><span class="note">提出書類一覧表(Excel)の様式と、その項目を決めます</span></div>'+
-   '<div class="brow"><b>作成する書類</b>'+DOCS.map(d=>'<label class="opt"><input type="checkbox" data-sc="d_'+d.id+'"'+(sel[d.id]!==false?' checked':'')+'> '+d.name.replace(/\(.*$/,'')+(d.sign?'<span class="signb" title="外国人本人の署名が必要: '+d.sign+'">✍本人署名</span>':'')+'</label>').join('')+'<label class="opt"><input type="checkbox" data-sc="xl"'+(xlOn()?' checked':'')+'> 提出書類一覧表(Excel)</label><label class="opt"><input type="checkbox" data-sc="imm"'+(SC.imm?' checked':'')+'> 入管オンライン申請(CSV用の項目)</label></div>'+
+   '<div class="brow"><b>作成する書類</b>'+DOCS.filter(d=>docUse(d).ok).map(d=>'<label class="opt"><input type="checkbox" data-sc="d_'+d.id+'"'+(sel[d.id]!==false?' checked':'')+'> '+d.name.replace(/\(.*$/,'')+(d.sign?'<span class="signb" title="外国人本人の署名が必要: '+d.sign+'">✍本人署名</span>':'')+'</label>').join('')+'<label class="opt"><input type="checkbox" data-sc="xl"'+(xlOn()?' checked':'')+'> 提出書類一覧表(Excel)</label><label class="opt"><input type="checkbox" data-sc="imm"'+(SC.imm?' checked':'')+'> 入管オンライン申請(CSV用の項目)</label></div>'+
    '<div class="brow"><label class="opt"><input type="checkbox" data-sc="all"'+(SC.all?' checked':'')+'> すべての項目を表示(絞り込みを解除)</label><label class="opt"><input type="checkbox" data-sc="loc"'+(SC.loc?' checked':'')+'> 各項目に、使われる書類と箇所を表示</label><span class="hid" id="scinfo"></span></div>';
   $('#sc_type').value=ty;
   $('#sc_type').onchange=e=>{ const w=curW(); if(!w) return; w.data.ap_type=e.target.value; touch('wk',w); renderAll(); };
@@ -2077,7 +2085,7 @@ function jumpTo(key){
 document.addEventListener('click',e=>{ const a=e.target.closest&&e.target.closest('a.jump'); if(!a) return; e.preventDefault(); jumpTo(a.dataset.k); });
 /* 外国人本人の署名が必要な書類の一覧(作成する書類のうち、様式に本人の署名欄があるもの) */
 function signBox(lang){
-  const on=DOCS.filter(x=>templateFor(x.id,lang)&&sel[x.id]!==false), need=on.filter(x=>x.sign), no=on.filter(x=>x.nosign), n=rosterList().length;
+  const md=merged(); const on=DOCS.filter(x=>templateFor(x.id,lang)&&docOnF(x,md)), need=on.filter(x=>x.sign), no=on.filter(x=>x.nosign), n=rosterList().length;
   const hx=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const e=document.createElement('div'); e.className='signbox'; const nm=x=>x.name.replace(/\(.*$/,'');
   let h='<b class="t">✍ 外国人本人の署名が必要な書類</b>'+(need.length?'<ul>'+need.map(x=>'<li><b>'+hx(nm(x))+'</b>: '+hx(x.sign)+'</li>').join('')+(n>1&&need.some(x=>x.id==='hcdecl')?'<li><b>受診者の申告書</b>: 名簿の'+n+'名分を1人1枚ずつ出力します(各人が署名)</li>':'')+(n>1&&need.some(x=>x.id==='support')?'<li><b>支援計画書の別紙(名簿)</b>: 「署　名」欄に名簿の'+n+'名それぞれが署名(支援計画書の署名欄は「別紙のとおり」)</li>':'')+'</ul>':'<div>選択中の書類にはありません。</div>');
@@ -2089,7 +2097,10 @@ function renderOut(){
   const d=merged(), lang=d.wk_lang||'en', c=natInfo(d.wk_nat);
   const info=$('#langinfo'); info.innerHTML='書類の言語: <b>'+LANGS[lang]+'</b>'+(c[2]&&lang==='en'?' <span class="warn">('+d.wk_nat+'語版は未搭載のため英語版で代替)</span>':'');
   const box=$('#docs'); box.innerHTML='';
-  DOCS.forEach(doc=>{ const ok=!!templateFor(doc.id,lang); const l=document.createElement('label'); l.className='opt doc'+(ok?'':' off'); const i=document.createElement('input'); i.type='checkbox'; i.checked=ok&&(sel[doc.id]!==false); i.disabled=!ok; i.onchange=()=>{sel[doc.id]=i.checked; renderOut();}; l.append(i,' '+doc.name+(ok?'':'  ※'+LANGS[lang]+'版の様式ファイルが未取り込みです')); if(doc.sign){ const b=document.createElement('span'); b.className='signb'; b.textContent='✍本人署名'; b.title='外国人本人の署名が必要: '+doc.sign; l.appendChild(b); } box.appendChild(l); });
+  { const sig=DOCS.filter(x=>docUse(x,d).ok).map(x=>x.id).join(',');   /* 必要な書類が変わったら(申請の種類・実施体制・省略可の選択など)、「最初に選ぶ」の書類一覧と表示項目も更新する */
+    if(renderOut._sig!==undefined&&renderOut._sig!==sig){ renderOut._sig=sig; setTimeout(()=>{ renderScope(); renderForm(); renderOut(); },0); } renderOut._sig=sig; }
+  const hid=[]; DOCS.forEach(doc=>{ const u=docUse(doc,d); if(!u.ok){ hid.push(doc.name.replace(/\(.*$/,'')+'('+u.why+')'); return; } const ok=!!templateFor(doc.id,lang); const l=document.createElement('label'); l.className='opt doc'+(ok?'':' off'); const i=document.createElement('input'); i.type='checkbox'; i.checked=ok&&(sel[doc.id]!==false); i.disabled=!ok; i.onchange=()=>{sel[doc.id]=i.checked; renderOut();}; l.append(i,' '+doc.name+(ok?'':'  ※'+LANGS[lang]+'版の様式ファイルが未取り込みです')); if(doc.sign){ const b=document.createElement('span'); b.className='signb'; b.textContent='✍本人署名'; b.title='外国人本人の署名が必要: '+doc.sign; l.appendChild(b); } box.appendChild(l); });
+  if(hid.length){ const n=document.createElement('p'); n.className='note'; n.style.margin='4px 0'; n.textContent='表示していない書類: '+hid.join(' / '); box.appendChild(n); }
   box.appendChild(signBox(lang));
   /* 提出書類一覧表(Excel): 書類の言語に依存しない(日本語の様式) */
   const dv=Fill.derive(Object.assign({},d));   /* 作成責任者など、選択から決まる値は計算後の値で確認する */
@@ -2098,14 +2109,14 @@ function renderOut(){
     XL.KINDS.forEach(k=>{ const st=XL.status(k.kind,d,ctx); if(st.hide) return; const l=document.createElement('label'); l.className='opt doc'+(st.ok?'':' off'); const i=document.createElement('input'); i.type='checkbox'; i.checked=st.ok&&(sel[k.id]!==false); i.disabled=!st.ok; i.onchange=()=>{sel[k.id]=i.checked;};
       l.append(i,' '+k.name+(st.ok?(/^(tbl3|tbl13|tbl2|tbl2s)$/.test(k.kind)?'  → '+XL.FORMS[st.form].title:''):'  ※'+st.reason)); box.appendChild(l);
       if(st.ok&&sel[k.id]!==false&&k.kind!=='roster'){ const P=XL.plan(st.form,d,ctx); if(P.missing.length) xwarn.push(k.name+'の未選択: '+P.missing.map((m,i)=>J(m,P.missingKeys[i]||'')).join(' / ')+'(未選択の項目は○を付けずに出力)'); if(P.infoMissing.length) xwarn.push('過去提出の情報が未入力: '+P.infoMissing.map(m=>J(m,/申請年月日/.test(m)?'ap_prev_date':'ap_prev_no')).join(' / ')); } }); }
-  if(sel.pledge!==false&&templateFor('pledge',lang)){   /* 登録支援機関誓約書: 全部委託・農業分野の様式 */
+  if(sel.pledge!==false&&templateFor('pledge',lang)&&docUse(DOCS.find(x=>x.id==='pledge'),d).ok){   /* 登録支援機関誓約書: 全部委託・農業分野の様式 */
     if(d.sp_out!=='rso') xwarn.push('登録支援機関誓約書: '+J('「支援の実施」','sp_out')+'が登録支援機関への全部委託になっていないため、登録支援機関の欄は空欄になります(全部委託でない場合は誓約書は不要か、要確認です)');
     else{ const m=[['rso_name','登録支援機関の氏名又は名称'],['rso_addr','登録支援機関の住所']].filter(([k])=>!String(d[k]||'').trim()).map(x=>J(x[1],x[0])); if(m.length) xwarn.push('登録支援機関誓約書の未入力: '+m.join(' / ')); }
     { const dd=Fill.derive(Object.assign({},d)); if(!String(dd.pl_name||'').trim()) xwarn.push('登録支援機関誓約書の'+J('作成責任者',d.pl_preparer?dd.pl_name_key:'pl_preparer')+'が未選択、または選んだ人の氏名が未入力です(「作成責任者を選ぶ」で選択、または氏名を入力)'); }
     if(!/農業/.test(d.ct_field||'')) xwarn.push('登録支援機関誓約書: 様式は農業分野用です('+J('分野','ct_field')+'が「農業」になっていません)'); }
   if(sel.wage!==false&&templateFor('wage',lang)&&(dv.ct_wage_basis==='daily'||dv.ct_wage_basis==='hourly')&&!String(dv.ct_monthly_equiv||'').trim())
     xwarn.push('賃金の支払: '+(dv.ct_wage_basis==='daily'?'日給':'時給')+'のため、'+J('1か月当たり金額','ct_monthly_equiv')+'を入力してください(1か月当たり支払概算額・手取支給額の自動計算に使います。未入力の間は両方とも空欄になります)');
-  const miss=[], missK=new Set(); const docOn=id=>!!templateFor(id,lang)&&sel[id]!==false;
+  const miss=[], missK=new Set(); const docOn=id=>{ const x=DOCS.find(y=>y.id===id); return !!templateFor(id,lang)&&(x?docOnF(x,d):sel[id]!==false); };
   SCHEMA.forEach(g=>g.fields.forEach(f=>{ const need=f.req||(f.reqIf==='rso'&&d.sp_out==='rso')||(f.reqIf==='self'&&d.sp_out!=='rso')||(f.reqDocs&&f.reqDocs.some(r=>docOn(r.doc)&&(!r.when||(r.when==='rso')===(d.sp_out==='rso'))));
     const v=f.k==='sp_preparer'?dv.sp_preparer:d[f.k]; const empty=Array.isArray(v)?!v.length:!String(v||'').trim();
     if(need&&empty&&!missK.has(f.k)){ const kk=f.k==='sp_preparer'?(dv.sp_preparer_sel?dv.sp_preparer_key:'sp_preparer'):f.k; missK.add(f.k); missK.add(kk); miss.push(J(f.l,kk)); } }));
@@ -2122,7 +2133,7 @@ function renderOut(){
   renderRosterUI(lang);
   $('#warn').innerHTML=(miss.length?'<span class="warn">未入力(必須): '+miss.join(' / ')+'</span>':'')+(xwarn.length?'<div class="warn" style="margin-top:6px">'+xwarn.join('<br>')+'</div>':'');
 }
-const sel={}; DOCS.forEach(d=>{ if(d.off) sel[d.id]=false; });   /* 既定で出力しない書類(雇用の経緯に係る説明書: 認定・変更で必要な場合だけ選ぶ) */
+const sel={}; 
 /* マスタ画面で、必須なのに未入力の欄を赤く表示し、グループ見出しに未入力の件数を出す */
 function markMiss(ks){
   $$('#form label.f.miss').forEach(e=>e.classList.remove('miss'));
@@ -2302,7 +2313,7 @@ async function gen(asZip){
   if(allRecs().some(([k,r])=>r._dirty)) await flush();
   const d=merged(), lang=d.wk_lang||'en'; const safe=(d.wk_name||'worker').replace(/[^\w\-]+/g,'_');
   const out=[]; const rs=rosterList(), ros=rs.length>1;
-  for(const doc of DOCS){ const t=templateFor(doc.id,lang); if(!t||sel[doc.id]===false) continue;
+  for(const doc of DOCS){ const t=templateFor(doc.id,lang); if(!t||!docOnF(doc,d)) continue;
     let dd=d;
     if(ros&&doc.roster){ const ivs=new Set(rs.map(x=>x.data.wk_iv||'')); dd=Object.assign({},d,{roster_n:rs.length,wk_iv:ivs.size===1?[...ivs][0]:''}); }
     if(doc.each&&ros){ for(const x of rs){ const m=mergedFor(x), sf=(m.wk_name||'worker').replace(/[^\w\-]+/g,'_'); out.push({name:sf+'_'+doc.id+'_'+lang+'.docx',bytes:await Fill.render(JSZip,b64(t),m)}); } continue; }   /* 受診者の申告書: 名簿方式でも1人1枚 */
@@ -2433,7 +2444,7 @@ const XP=(()=>{
 /* ---- プレビューの項目(Word 書類+提出書類一覧表(Excel))と描画 ---- */
 const PVXL=['r','e','h'];
 function pvItems(){ const d=merged(), lang=d.wk_lang||'en', n=rosterList().length, out=[];
-  DOCS.forEach(x=>{ if(sel[x.id]!==false&&templateFor(x.id,lang)) out.push({id:x.id,t:'doc',doc:x,name:x.name.replace(/\(.*$/,''),let:DOCLET[x.id]}); });
+  DOCS.forEach(x=>{ if(docOnF(x,d)&&templateFor(x.id,lang)) out.push({id:x.id,t:'doc',doc:x,name:x.name.replace(/\(.*$/,''),let:DOCLET[x.id]}); });
   XL.KINDS.forEach(k=>{ if(sel[k.id]===false||k.once) return; let st; try{ st=XL.status(k.kind,d,{rosterN:n}); }catch(e){ st={ok:false,reason:String(e.message||e)}; } if(st.hide) return; out.push({id:k.id,t:'xl',k:k,st:st,name:k.file.replace(/^提出書類一覧表_?/,'Excel '),let:'xl'}); });
   return out; }
 async function pvBytes(it,dd){
