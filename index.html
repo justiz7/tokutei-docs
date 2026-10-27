@@ -63,6 +63,9 @@ body.pvon #pv{display:flex}body.pvon{padding-right:min(580px,46vw)}
 #pv .ph{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line,#ccd)}
 #pv .ph b{font-size:13px}#pv .ph button{padding:4px 8px;font-size:12px}#pv .ph button.on{background:#1f4e8c;color:#fff}#pv .ph button.off{opacity:.5}
 #pv .pst{font-size:11px;color:var(--mut);padding:4px 10px;min-height:16px}
+.signb{display:inline-block;margin-left:6px;padding:0 7px;border-radius:9px;background:#ad1457;color:#fff;font-size:11px;font-weight:600;white-space:nowrap;vertical-align:1px}
+.signbox{margin:8px 0 4px;padding:8px 10px;border:1px solid #ad1457;border-left:4px solid #ad1457;border-radius:6px;background:rgba(173,20,87,.06);font-size:12.5px;line-height:1.55}.signbox b.t{color:#ad1457}.signbox ul{margin:4px 0 2px;padding-left:18px}.signbox .note{margin:4px 0 0}
+#pv .ph button.sg{border-color:#ad1457;color:#ad1457}
 #pvb{flex:1;overflow:auto;background:#8a8f98;padding:8px}#pvb .docx-wrapper{background:transparent!important;padding:0!important}
 #pvb section.docx{margin:0 auto 8px!important;box-shadow:0 0 4px rgba(0,0,0,.4)}
 #pvbtn{margin-left:12px;padding:5px 10px;font-size:12px}
@@ -1640,11 +1643,11 @@ window.COUNTRIES=[
 ];
 window.LANGS={id:'インドネシア語併記',ne:'ネパール語併記',en:'英語併記'};
 window.DOCS=[
- {id:'contract',name:'雇用契約書(参考様式第1-5号)'},
- {id:'conditions',name:'雇用条件書(参考様式第1-6号)'},
- {id:'wage',name:'賃金の支払(参考様式第1-6号 別紙1)'},
- {id:'support',name:'1号特定技能外国人支援計画書(参考様式第1-17号)',roster:'1号特定技能外国人支援計画書（参考様式第1-17号）'},
- {id:'pledge',name:'登録支援機関誓約書(分野参考様式第11-4号・農業分野・日本語のみ)',roster:'登録支援機関誓約書（分野参考様式第11-4号）'},
+ {id:'contract',name:'雇用契約書(参考様式第1-5号)',sign:'末尾の「乙（特定技能外国人の署名）」欄'},
+ {id:'conditions',name:'雇用条件書(参考様式第1-6号)',sign:'末尾の「受取人（署名）」欄'},
+ {id:'wage',name:'賃金の支払(参考様式第1-6号 別紙1)',nosign:'雇用条件書の別紙。受領の署名は雇用条件書の欄'},
+ {id:'support',name:'1号特定技能外国人支援計画書(参考様式第1-17号)',roster:'1号特定技能外国人支援計画書（参考様式第1-17号）',sign:'末尾の「署名日」と「１号特定技能外国人の署名」欄(その上の「翻訳文の交付を受け…理解しました」「面談方法の希望」の確認文も本人が確認)'},
+ {id:'pledge',name:'登録支援機関誓約書(分野参考様式第11-4号・農業分野・日本語のみ)',roster:'登録支援機関誓約書（分野参考様式第11-4号）',nosign:'登録支援機関が作成'},
 ];
 
 /* 外国語表記(母国語併記欄用): 各日本語項目の直後に _en / _ne を追加 */
@@ -1950,7 +1953,7 @@ function renderScope(){
   host.innerHTML='<h2>最初に選ぶ: 入力する内容</h2>'+
    '<div class="brow"><b>入力する対象</b>'+['wk','org','rso'].map(k=>'<label class="opt"><input type="checkbox" data-sc="t_'+k+'"'+(scTgt(k)?' checked':'')+'> '+L[k]+'</label>').join('')+'</div>'+
    '<div class="brow"><b>申請の種類</b><select id="sc_type"><option value="renew">在留期間更新許可申請</option><option value="coe">在留資格認定証明書交付申請</option><option value="chg">在留資格変更許可申請</option></select><span class="note">提出書類一覧表(Excel)の様式と、その項目を決めます</span></div>'+
-   '<div class="brow"><b>作成する書類</b>'+DOCS.map(d=>'<label class="opt"><input type="checkbox" data-sc="d_'+d.id+'"'+(sel[d.id]!==false?' checked':'')+'> '+d.name.replace(/\(.*$/,'')+'</label>').join('')+'<label class="opt"><input type="checkbox" data-sc="xl"'+(xlOn()?' checked':'')+'> 提出書類一覧表(Excel)</label><label class="opt"><input type="checkbox" data-sc="imm"'+(SC.imm?' checked':'')+'> 入管オンライン申請(CSV用の項目)</label></div>'+
+   '<div class="brow"><b>作成する書類</b>'+DOCS.map(d=>'<label class="opt"><input type="checkbox" data-sc="d_'+d.id+'"'+(sel[d.id]!==false?' checked':'')+'> '+d.name.replace(/\(.*$/,'')+(d.sign?'<span class="signb" title="外国人本人の署名が必要: '+d.sign+'">✍本人署名</span>':'')+'</label>').join('')+'<label class="opt"><input type="checkbox" data-sc="xl"'+(xlOn()?' checked':'')+'> 提出書類一覧表(Excel)</label><label class="opt"><input type="checkbox" data-sc="imm"'+(SC.imm?' checked':'')+'> 入管オンライン申請(CSV用の項目)</label></div>'+
    '<div class="brow"><label class="opt"><input type="checkbox" data-sc="all"'+(SC.all?' checked':'')+'> すべての項目を表示(絞り込みを解除)</label><label class="opt"><input type="checkbox" data-sc="loc"'+(SC.loc?' checked':'')+'> 各項目に、使われる書類と箇所を表示</label><span class="hid" id="scinfo"></span></div>';
   $('#sc_type').value=ty;
   $('#sc_type').onchange=e=>{ const w=curW(); if(!w) return; w.data.ap_type=e.target.value; touch('wk',w); renderAll(); };
@@ -2038,11 +2041,22 @@ function jumpTo(key){
   const inp=el.querySelector&&el.querySelector('input,select,textarea'); if(inp&&el.matches('label.f')) try{ inp.focus({preventScroll:true}); }catch(e){}
   return true; }
 document.addEventListener('click',e=>{ const a=e.target.closest&&e.target.closest('a.jump'); if(!a) return; e.preventDefault(); jumpTo(a.dataset.k); });
+/* 外国人本人の署名が必要な書類の一覧(作成する書類のうち、様式に本人の署名欄があるもの) */
+function signBox(lang){
+  const on=DOCS.filter(x=>templateFor(x.id,lang)&&sel[x.id]!==false), need=on.filter(x=>x.sign), no=on.filter(x=>x.nosign), n=rosterList().length;
+  const hx=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const e=document.createElement('div'); e.className='signbox'; const nm=x=>x.name.replace(/\(.*$/,'');
+  let h='<b class="t">✍ 外国人本人の署名が必要な書類</b>'+(need.length?'<ul>'+need.map(x=>'<li><b>'+hx(nm(x))+'</b>: '+hx(x.sign)+'</li>').join('')+(n>1&&need.some(x=>x.id==='support')?'<li><b>支援計画書の別紙(名簿)</b>: 「署　名」欄に名簿の'+n+'名それぞれが署名(支援計画書の署名欄は「別紙のとおり」)</li>':'')+'</ul>':'<div>選択中の書類にはありません。</div>');
+  const ex=no.map(x=>nm(x)+'('+x.nosign+')'); if(n>1&&on.some(x=>x.id==='pledge')) ex.push('登録支援機関誓約書の別紙(名簿)にも「署　名」欄がありますが、誓約書本体に本人の署名欄がないため、署名の要否は様式からは判断できません(要確認)');
+  ex.push('提出書類一覧表(Excel)・申請人名簿(Excel)');
+  h+='<p class="note">署名欄なし: '+hx(ex.join(' / '))+'。書類プレビューでは、本人の署名欄をピンクで示します。署名欄の有無は本ツールのひな形(参考様式)の記載から判定したもので、入管庁の案内での確認はしていません。</p>';
+  e.innerHTML=h; return e; }
 function renderOut(){
   const d=merged(), lang=d.wk_lang||'en', c=natInfo(d.wk_nat);
   const info=$('#langinfo'); info.innerHTML='書類の言語: <b>'+LANGS[lang]+'</b>'+(c[2]&&lang==='en'?' <span class="warn">('+d.wk_nat+'語版は未搭載のため英語版で代替)</span>':'');
   const box=$('#docs'); box.innerHTML='';
-  DOCS.forEach(doc=>{ const ok=!!templateFor(doc.id,lang); const l=document.createElement('label'); l.className='opt doc'+(ok?'':' off'); const i=document.createElement('input'); i.type='checkbox'; i.checked=ok&&(sel[doc.id]!==false); i.disabled=!ok; i.onchange=()=>{sel[doc.id]=i.checked; renderOut();}; l.append(i,' '+doc.name+(ok?'':'  ※'+LANGS[lang]+'版の様式ファイルが未取り込みです')); box.appendChild(l); });
+  DOCS.forEach(doc=>{ const ok=!!templateFor(doc.id,lang); const l=document.createElement('label'); l.className='opt doc'+(ok?'':' off'); const i=document.createElement('input'); i.type='checkbox'; i.checked=ok&&(sel[doc.id]!==false); i.disabled=!ok; i.onchange=()=>{sel[doc.id]=i.checked; renderOut();}; l.append(i,' '+doc.name+(ok?'':'  ※'+LANGS[lang]+'版の様式ファイルが未取り込みです')); if(doc.sign){ const b=document.createElement('span'); b.className='signb'; b.textContent='✍本人署名'; b.title='外国人本人の署名が必要: '+doc.sign; l.appendChild(b); } box.appendChild(l); });
+  box.appendChild(signBox(lang));
   /* 提出書類一覧表(Excel): 書類の言語に依存しない(日本語の様式) */
   const dv=Fill.derive(Object.assign({},d));   /* 作成責任者など、選択から決まる値は計算後の値で確認する */
   const xwarn=[]; { const h=document.createElement('div'); h.className='note'; h.style.margin='10px 0 4px'; h.textContent='提出書類一覧表(Excel・日本語)'; box.appendChild(h);
@@ -2393,23 +2407,34 @@ async function pvBytes(it,dd){
     return Fill.render(JSZip,b64(templateFor(doc.id,lang)),d2); }
   return XL.render(JSZip,b64(window.XLTEMPLATES[XL.tplKey(it.k.kind,dd)]),it.k.kind,dd,{rosterN:rosterList().length});
 }
+/* 外国人本人の署名欄(と署名日)の段落: 日本語・外国語の見出しで判定する(書類プレビューでピンクに塗る) */
+const PVSIGN=/^(受取人（署名）|Recipient（signature）|Penerima \(tanda tangan\)|प्रापक \(हस्ताक्षर\)|（特定技能外国人の署名）|\(Signature of the specified skilled worker\)|\(Tanda tangan pekerja asing berketerampilan khusus\)|（विशेष सीप भएको विदेशीको हस्ताक्षर）|乙|Pihak Kedua|दोस्रो पक्ष|Specified skilled worker|署名日|Date of signature|Tanggal dibuat Tanggal bulan tahun|सहि\s|１号特定技能外国人の署名|Signature of the specified skilled worker \(i\)|Tanda tangan pekerja asing berketerampilan khusus 1|१\. विशेष सीप भएका बिदेशीको सहि)/;
+const pvPtext=c=>(c.match(/<w:t(?:\s[^>]*)?>[^<]*<\/w:t>/g)||[]).map(t=>t.replace(/<[^>]+>/g,'')).join('').trim();
+function pvShade(c,fill){ return c.replace(/(<w:p(?:\s[^>]*)?>)(?![\s\S]*<w:p[\s>])(<w:pPr>)?/,(m,o,pp)=>pp?o+pp+'<w:shd w:val="clear" w:color="auto" w:fill="'+fill+'"/>':o+'<w:pPr><w:shd w:val="clear" w:color="auto" w:fill="'+fill+'"/></w:pPr>'); }
+function pvSignMark(ps,doc,skip){ let n=0; if(!doc||!doc.sign) return 0;
+  for(let i=0;i<ps.length;i++){ if(skip&&skip.has(i)) continue; const t=pvPtext(ps[i]); if(!t) continue; const w=/^(乙|Pihak Kedua|दोस्रो पक्ष|Specified skilled worker)$/.test(t);
+    if(PVSIGN.test(t)&&(w?doc.id==='contract':!/^(乙|Pihak Kedua|दोस्रो पक्ष|Specified skilled worker)/.test(t))){ ps[i]=pvShade(ps[i],'F8BBD0'); n++; } }
+  return n; }
 async function pvXml(bytes){ const z=await JSZip.loadAsync(bytes); return {z,xml:await z.file('word/document.xml').async('string')}; }
 /* 1つの項目について、書類(タブ)ごとの強調を作る。戻り値 {hit,note,out(docx)|model,hl(xlsx)} */
 async function pvBuild(it,key,f,d){
   if(it.t==='xl'&&!it.st.ok) return {hit:0,note:it.st.reason||'この様式は出力されません',skip:true};
   const b0=await pvBytes(it,d);
-  if(!key||!f){ return it.t==='doc'?{hit:0,out:b0}:{hit:0,model:await XP.parse(b0),hl:[]}; }
+  if(!key||!f){ if(it.t!=='doc') return {hit:0,model:await XP.parse(b0),hl:[]};
+    const x=await pvXml(b0), ps=x.xml.split('</w:p>'), sg=pvSignMark(ps,it.doc); if(!sg) return {hit:0,out:b0,sign:0};
+    x.z.file('word/document.xml',ps.join('</w:p>')); return {hit:0,sign:sg,out:await x.z.generateAsync({type:'arraybuffer'})}; }
   const alt=pvAlt(f,d[key]); if(alt===undefined) return {hit:0,out:b0,model:it.t==='xl'?await XP.parse(b0):null,hl:[],note:'この項目は強調できません(箇所の一覧を参照)。'};
   const d2=Object.assign({},d); d2[key]=alt; if(key.slice(0,3)==='rs_'&&d.sp_out==='rso') d2['sp_'+key.slice(3)]=alt;
   let b1; try{ b1=await pvBytes(it,d2); }catch(e){ return {hit:0,out:b0,model:it.t==='xl'?await XP.parse(b0):null,hl:[],note:'別の値では出力できないため、強調できません。'}; }
   if(it.t==='xl'){ const [m0,m1]=await Promise.all([XP.parse(b0),XP.parse(b1)]); const hl=XP.diff(m0,m1); return {hit:hl.length,model:m0,hl,note:hl.length?'':'この様式では、この項目の値は出力に現れません。'}; }
-  const [x0,x1]=await Promise.all([pvXml(b0),pvXml(b1)]); const p0=x0.xml.split('</w:p>'), p1=x1.xml.split('</w:p>'); let hit=0;
+  const [x0,x1]=await Promise.all([pvXml(b0),pvXml(b1)]); const p0=x0.xml.split('</w:p>'), p1=x1.xml.split('</w:p>'); let hit=0; const yel=new Set();
   if(p0.length!==p1.length) return {hit:0,out:b0,note:'段落数が変わるため、位置を特定できません。'};
-  for(let i=0;i<p0.length;i++){ if(PVNOISE(p0[i])===PVNOISE(p1[i])) continue; hit++;
+  for(let i=0;i<p0.length;i++){ if(PVNOISE(p0[i])===PVNOISE(p1[i])) continue; hit++; yel.add(i);
     p0[i]=p0[i].replace(/<w:r(\s[^>]*)?>(?:(?!<w:r[\s>])[\s\S])*?<\/w:r>/g,m=>{ if(/<w:rPr>/.test(m)) return m.replace('<w:rPr>','<w:rPr><w:highlight w:val="yellow"/>'); return m.replace(/(<w:r(?:\s[^>]*)?>)/,'$1<w:rPr><w:highlight w:val="yellow"/></w:rPr>'); });
     p0[i]=p0[i].replace(/(<w:p(?:\s[^>]*)?>)(?![\s\S]*<w:p[\s>])/,(m,o)=>o+'<w:pPr><w:shd w:val="clear" w:color="auto" w:fill="FFF59D"/></w:pPr>'); }
-  if(!hit) return {hit:0,out:b0,note:'この書類では、この項目の値は出力に現れません。'};
-  x0.z.file('word/document.xml',p0.join('</w:p>')); return {hit,out:await x0.z.generateAsync({type:'arraybuffer'})};
+  const sg=pvSignMark(p0,it.doc,yel);
+  if(!hit&&!sg) return {hit:0,out:b0,note:'この書類では、この項目の値は出力に現れません。'};
+  x0.z.file('word/document.xml',p0.join('</w:p>')); return {hit,sign:sg,out:await x0.z.generateAsync({type:'arraybuffer'}),note:hit?'':'この書類では、この項目の値は出力に現れません。'};
 }
 async function pvRender(){
   if(!PV.on) return; const my=++PV.tok; const st=$('#pvst'), host=$('#pvb'), tabs=$('#pvtabs');
@@ -2424,7 +2449,8 @@ async function pvRender(){
     const t0=performance.now(); let res=null, shown=cur;
     for(const it of cands){ const r=await pvBuild(it,key,f,d); if(my!==PV.tok) return; if(!res&&it===cur){ res=r; shown=it; } if(r.hit>0&&!r.skip){ res=r; shown=it; break; } }
     PV.doc=shown.id;
-    items.forEach(it=>{ const b=document.createElement('button'); b.type='button'; b.className='sec'+(it.id===shown.id?' on':'')+(it.t==='xl'&&!it.st.ok?' off':''); b.textContent=it.name; b.onclick=()=>{ PV.doc=it.id; pvRender(); }; tabs.appendChild(b); });
+    items.forEach(it=>{ const b=document.createElement('button'); b.type='button'; b.className='sec'+(it.id===shown.id?' on':'')+(it.t==='xl'&&!it.st.ok?' off':''); b.textContent=it.name+(it.t==='doc'&&it.doc.sign?' ✍':''); if(it.t==='doc'&&it.doc.sign) b.title='外国人本人の署名が必要な書類'; b.onclick=()=>{ PV.doc=it.id; pvRender(); }; tabs.appendChild(b); });
+    if(shown.t==='doc'&&shown.doc.sign&&res.sign){ const b=document.createElement('button'); b.type='button'; b.className='sec sg'; b.textContent='✍署名欄へ'; b.title='外国人本人の署名欄(ピンク)へ移動'; b.onclick=()=>{ const e=[...host.querySelectorAll('p')].find(p=>/(248, 187, 208|#f8bbd0)/i.test((p.getAttribute('style')||'')+' '+(p.style.backgroundColor||''))); if(e){ const r=e.getBoundingClientRect(), h=host.getBoundingClientRect(); host.scrollTop+=r.top-h.top-h.height/3; } }; tabs.appendChild(b); }
     host.innerHTML='';
     if(res.skip){ st.textContent=shown.name+': '+res.note; return; }
     if(shown.t==='doc'){ await docx.renderAsync(res.out,host,null,{inWrapper:true,ignoreWidth:false,breakPages:true,useBase64URL:true,ignoreLastRenderedPageBreak:false});
@@ -2434,7 +2460,7 @@ async function pvRender(){
     const first=res.hit?(shown.t==='xl'?host.querySelector('.pvhl'):[...host.querySelectorAll('span,p,td')].find(e=>/(255, 245, 157|255, 255, 0|#fff59d|#ffff00)/i.test(e.getAttribute('style')||'')||/yellow/.test(e.style&&e.style.backgroundColor||''))):null;
     if(first){ const r=first.getBoundingClientRect(), h=host.getBoundingClientRect(); host.scrollTop+=r.top-h.top-h.height/3; }
     const ms=Math.round(performance.now()-t0);
-    st.textContent=(key&&f?'「'+f.l+'」: ':'')+(res.hit?(shown.t==='xl'?res.hit+'か所を強調(セル・○)':res.hit+'か所を強調'):res.note||'項目を選ぶと、その値が入る箇所を黄色で示します。')+'('+ms+'ms'+(res.hit&&!first?'・強調が見つかりません':'')+')';
+    st.textContent=(res.sign?'ピンク=本人の署名欄。':'')+(key&&f?'「'+f.l+'」: ':'')+(res.hit?(shown.t==='xl'?res.hit+'か所を強調(セル・○)':res.hit+'か所を強調'):res.note||'項目を選ぶと、その値が入る箇所を黄色で示します。')+'('+ms+'ms'+(res.hit&&!first?'・強調が見つかりません':'')+')';
   }catch(e){ if(my===PV.tok) st.textContent='プレビューに失敗しました: '+e.message; console.error(e); }
 }
 function pvLater(ms){ clearTimeout(PV.timer); PV.timer=setTimeout(pvRender,ms); }
