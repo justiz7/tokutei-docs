@@ -70,9 +70,11 @@ body.pvon #pv{display:flex}body.pvon{padding-right:min(580px,46vw)}
 #pvb section.docx{margin:0 auto 8px!important;box-shadow:0 0 4px rgba(0,0,0,.4)}
 #pvbtn{margin-left:12px;padding:5px 10px;font-size:12px}
 @media(max-width:900px){#pv{top:auto;left:0;width:auto;height:46vh;border-left:0;border-top:1px solid var(--line,#ccd)}body.pvon{padding-right:0;padding-bottom:46vh}}
+/* 書類プレビューの全画面表示 */
+body.pvfull #pv{top:0!important;left:0!important;right:0!important;bottom:0!important;width:auto!important;height:auto!important;border:0!important;z-index:60}
 </style></head><body>
 <header><h1>特定技能 入管書類作成 <button class="sec" id="pvbtn" type="button">書類プレビュー</button></h1><small>マスタを入力 → 国籍に応じた言語併記の様式に差し込み → Word(docx)・Excel(提出書類一覧表)で出力</small></header>
-<div id="pv"><div class="ph"><b>書類プレビュー</b><span id="pvtabs"></span><button class="sec" id="pvx" type="button" style="margin-left:auto">閉じる</button></div><div class="pst" id="pvst"></div><div id="pvb"></div></div>
+<div id="pv"><div class="ph"><b>書類プレビュー</b><span id="pvtabs"></span><button class="sec" id="pvfs" type="button" style="margin-left:auto" title="プレビューを画面全体に表示(Esc で戻る)">全画面</button><button class="sec" id="pvx" type="button">閉じる</button></div><div class="pst" id="pvst"></div><div id="pvb"></div></div>
 <main><section>
 <div class="card" id="bar"></div>
 <div class="card" id="scope"></div>
@@ -2510,7 +2512,11 @@ async function pvRender(){
   }catch(e){ if(my===PV.tok) st.textContent='プレビューに失敗しました: '+e.message; console.error(e); }
 }
 function pvLater(ms){ clearTimeout(PV.timer); PV.timer=setTimeout(pvRender,ms); }
-function pvOpen(on){ PV.on=on; document.body.classList.toggle('pvon',on); if(on) pvRender(); else PV.tok++; }
+function pvOpen(on){ PV.on=on; document.body.classList.toggle('pvon',on); if(!on) pvFull(false); if(on) pvRender(); else PV.tok++; }
+/* 全画面表示の切り替え(幅が変わるので描き直して倍率を合わせる) */
+function pvFull(on){ const was=document.body.classList.contains('pvfull'); document.body.classList.toggle('pvfull',on); const b=$('#pvfs'); if(b){ b.textContent=on?'元の表示に戻す':'全画面'; b.classList.toggle('on',on); } if(PV.on&&was!==on) pvRender(); }
+$('#pvfs').onclick=()=>pvFull(!document.body.classList.contains('pvfull'));
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&document.body.classList.contains('pvfull')) pvFull(false); });
 $('#pvbtn').onclick=()=>pvOpen(!PV.on); $('#pvx').onclick=()=>pvOpen(false);
 $('#form').addEventListener('focusin',e=>{ const l=e.target.closest&&e.target.closest('label.f[data-k]'); if(!l||!PV.on) return; if(PV.key===l.dataset.k) return; PV.key=l.dataset.k; pvLater(150); });
 $('#form').addEventListener('input',()=>{ if(PV.on) pvLater(700); });
