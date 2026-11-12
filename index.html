@@ -72,7 +72,35 @@ body.pvon #pv{display:flex}body.pvon{padding-right:min(580px,46vw)}
 @media(max-width:900px){#pv{top:auto;left:0;width:auto;height:46vh;border-left:0;border-top:1px solid var(--line,#ccd)}body.pvon{padding-right:0;padding-bottom:46vh}}
 /* 書類プレビューの全画面表示 */
 body.pvfull #pv{top:0!important;left:0!important;right:0!important;bottom:0!important;width:auto!important;height:auto!important;border:0!important;z-index:60}
-</style></head><body>
+</style>
+<!-- ---------- パスワード画面(簡易。GitHub 上のファイルを直接見れば中身は読める) ---------- -->
+<style>html.pwlock body>*:not(#pwgate){display:none!important}
+#pwgate{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:16px}
+#pwgate form{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:24px;width:min(360px,100%);display:flex;flex-direction:column;gap:12px}
+#pwgate h1{font-size:17px;margin:0}#pwgate input{font-size:16px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+#pwgate button{font-size:16px;min-height:44px;border:0;border-radius:8px;background:var(--acc);color:#fff;cursor:pointer}#pwgate .pwerr{color:var(--warn);min-height:1.5em;margin:0}</style>
+<script>(function(){
+var SALT='9ddd686a99a97d54f998f362250fb587',HASH='782b283c5c9717b9101262fb506a6a12ee509c996ecadbdcf9721f6c57ffc752',IT=200000,KEY='tokutei_pw_ok';
+try{if(sessionStorage.getItem(KEY)===HASH)return}catch(e){}
+document.documentElement.classList.add('pwlock');
+function hex(b){return Array.prototype.map.call(new Uint8Array(b),function(x){return('0'+x.toString(16)).slice(-2)}).join('')}
+function derive(pw){var s=new Uint8Array(SALT.match(/../g).map(function(h){return parseInt(h,16)}));
+return crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveBits']).then(function(k){
+return crypto.subtle.deriveBits({name:'PBKDF2',salt:s,iterations:IT,hash:'SHA-256'},k,256)}).then(hex)}
+document.addEventListener('DOMContentLoaded',function(){
+var g=document.createElement('div');g.id='pwgate';
+g.innerHTML='<form autocomplete="on"><h1>特定技能 入管書類作成</h1><label for="pwin">パスワードを入力してください</label><input id="pwin" type="password" autocomplete="current-password" required><button type="submit">開く</button><p class="pwerr" aria-live="polite"></p></form>';
+document.body.insertBefore(g,document.body.firstChild);
+var f=g.querySelector('form'),inp=g.querySelector('#pwin'),er=g.querySelector('.pwerr'),bt=g.querySelector('button');
+if(!(window.crypto&&crypto.subtle)){er.textContent='このブラウザではパスワードを確認できません(https の URL で開いてください)。';bt.disabled=true}
+inp.focus();
+f.addEventListener('submit',function(ev){ev.preventDefault();bt.disabled=true;er.textContent='確認中…';
+derive(inp.value).then(function(h){
+if(h===HASH){try{sessionStorage.setItem(KEY,HASH)}catch(e){}g.remove();document.documentElement.classList.remove('pwlock');window.dispatchEvent(new Event('resize'))}
+else{er.textContent='パスワードが違います。';inp.select()}
+}).catch(function(){er.textContent='確認できませんでした。'}).then(function(){bt.disabled=false})})});
+})();</script>
+</head><body>
 <header><h1>特定技能 入管書類作成 <button class="sec" id="pvbtn" type="button">書類プレビュー</button></h1><small>マスタを入力 → 国籍に応じた言語併記の様式に差し込み → Word(docx)・Excel(提出書類一覧表)で出力</small></header>
 <div id="pv"><div class="ph"><b>書類プレビュー</b><span id="pvtabs"></span><button class="sec" id="pvfs" type="button" style="margin-left:auto" title="プレビューを画面全体に表示(Esc で戻る)">全画面</button><button class="sec" id="pvx" type="button">閉じる</button></div><div class="pst" id="pvst"></div><div id="pvb"></div></div>
 <main><section>
