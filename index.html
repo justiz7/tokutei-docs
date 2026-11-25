@@ -350,6 +350,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       PAT.push([new RegExp('^第(\\d)・(\\d)'+c+'曜?日?$'),n[0]+' of weeks $1 and $2',n[1]+' minggu ke-$1 dan ke-$2','हप्ता $1 र $2 को '+n[2]]); });
     Object.assign(GL,{'年末年始':['Year-end and New Year holidays','Libur akhir dan awal tahun','वर्षान्त तथा नयाँ वर्षको बिदा'],'夏季休暇':['Summer holidays','Libur musim panas','ग्रीष्मकालीन बिदा'],'お盆':['Obon holidays','Libur Obon','ओबोन बिदा'],'お盆休み':['Obon holidays','Libur Obon','ओबोन बिदा'],'ゴールデンウィーク':['Golden Week','Golden Week','गोल्डेन वीक'],'創立記念日':['Company founding anniversary','Hari ulang tahun perusahaan','कम्पनी स्थापना दिवस'],'会社カレンダーによる':['According to the company calendar','Sesuai kalender perusahaan','कम्पनीको क्यालेन्डर अनुसार']}); })();
 
+  const PHR=[ // 文の一部に入っても訳す定型句: [regex(g), en, id, ne]。前後の括弧ごと置き換える
+   [/[(（]?\s*天候(?:等|など)?(?:によって|により|に応じて|次第で)(?:は)?(?:時間が|時刻が|日程が|休日が)?(?:変動|変更)(?:あり|する(?:ことがある|場合がある)?|します|することがあります|があります|の可能性あり)?\s*[)）]?/g,'subject to change depending on the weather','dapat berubah tergantung cuaca','मौसम अनुसार परिवर्तन हुन सक्छ']];
   const REC=[ // 前後に別の語がつく定型: $1 を再帰的に翻訳
    [/^(.+)に備え付け(?:てある|ている)?$/,'Kept at $1','Tersedia di $1','$1 मा राखिएको'],
    [/^(.+)に掲示(?:している|してある)?$/,'Posted on $1','Dipasang di $1','$1 मा टाँसिएको'],
@@ -471,6 +473,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       if(dm) return lang==='ne'?dm[1]+' साल '+(+dm[2])+' महिना '+(+dm[3])+' तारिख':String(+dm[3]).padStart(2,'0')+'/'+String(+dm[2]).padStart(2,'0')+'/'+dm[1]; }
     if(!/[぀-ヿ一-鿿]/.test(v)) return v;       // すでに外国語/英数字のみ
     const li=lang==='id'?1:lang==='ne'?2:0;
+    /* 文の一部に入る定型句(例 「8:00〜17:00（天候によって変動あり）」): 定型句を訳し、残りの部分も訳す(残りが辞書外なら日本語のまま) */
+    for(const ph of PHR){ ph[0].lastIndex=0; if(!ph[0].test(v)) continue; ph[0].lastIndex=0;
+      const t=ph[1+li], segs=v.split(ph[0]), items=[];
+      segs.forEach((g,i)=>{ const gt=g.replace(/^[\s　、，,。・]+|[\s　、，,。・]+$/g,''); if(gt) items.push(trFree(gt,lang,extra));
+        if(i<segs.length-1){ if(gt&&items.length) items[items.length-1]+=' ('+t+')'; else items.push(t.charAt(0).toUpperCase()+t.slice(1)); } });
+      return items.join(', '); }
     const ex={}; String(extra||'').split(/[;；\n]/).forEach(x=>{ const m=/^\s*(.+?)\s*=\s*(.+)$/.exec(x); if(!m) return; const p=m[2].split('/').map(s=>s.trim()); ex[m[1].trim()]=[p[0]||'',p[1]||p[0]||'',p[2]||p[0]||'']; });
     const norm=s=>s.replace(/[（]/g,'(').replace(/[）]/g,')').replace(/[　 ]+/g,'').replace(/，/g,'、');
     const one=s=>{ s=s.trim(); if(!s) return '';
