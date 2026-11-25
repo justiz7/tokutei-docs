@@ -42,7 +42,18 @@ button:disabled{opacity:.45;cursor:default}
 .dlg{background:var(--card);color:var(--ink);border-radius:10px;max-width:880px;width:100%;max-height:88vh;overflow:auto;padding:16px 18px}
 .dlg h3{margin:0 0 8px;font-size:16px}.dlg details{border:1px solid var(--line);border-radius:8px;margin:8px 0;padding:0}.dlg summary{padding:8px 12px}
 .dlg table.idf{border-collapse:collapse;margin:4px 12px 10px;font-size:12px;width:calc(100% - 24px)}.idf th,.idf td{border:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top;word-break:break-all}
-.dlg .note,.dlg .iss{margin:4px 12px;font-size:12px}.dlg .iss{color:var(--warn);padding-left:22px}
+.dlg .note,.dlg .iss{margin:4px 12px;font-size:12px}
+/* 外国人の一覧(選択画面)・同時申請の選択欄 */
+.wl-tools{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:6px 0 8px}.wl-tools input[type=text]{flex:1 1 220px;min-width:0}.wl-tools select{max-width:100%}
+.wl-wrap{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:8px}
+table.wl{border-collapse:collapse;width:100%;font-size:13px}.wl th,.wl td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;white-space:nowrap}
+.wl th{position:sticky;top:0;background:var(--card);cursor:pointer;user-select:none;z-index:1;box-shadow:0 1px 0 var(--line)}.wl th .ar{font-size:10px;color:#889}
+.wl tbody tr{cursor:pointer}.wl tbody tr:hover{background:#eef4ff}.wl tbody tr.cur{background:#fff3c4;font-weight:600}.wl tbody tr.kb{outline:2px solid #3b82f6;outline-offset:-2px}
+.wl td.nm{white-space:normal;min-width:9em}
+.rs-tools{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin:6px 0}.rs-tools input[type=text]{flex:1 1 180px;min-width:0}
+.rs-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:2px 12px;max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.rs-list label.opt{padding:4px 2px}.rs-list label[hidden]{display:none}.rs-list .lx{color:#a15c00;font-size:11px}
+@media(max-width:700px){.wl th,.wl td{padding:9px 6px;font-size:12px}.wl .hm{display:none}}.dlg .iss{color:var(--warn);padding-left:22px}
 .tag{font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line)}.tag.n{background:#d8f0dc;color:#14532d}.tag.u{background:#dbeafe;color:#1e3a8a}.tag.s{background:#eee;color:#555}
 
 fieldset.mk{border:1px solid var(--line);border-radius:8px;margin:8px 0;padding:6px 10px}fieldset.mk legend{padding:0 6px}.mkb{padding:2px 4px}
@@ -2099,10 +2110,49 @@ function fillSelects(){
   const nd=$('#nodir'); if(nd) nd.hidden=!!(window.showDirectoryPicker||window.__TEST_DIR);
   const fb=$('#fbtn'); if(fb){ if(!(window.showDirectoryPicker||window.__TEST_DIR)){ fb.disabled=true; fb.textContent='フォルダ保存はこの端末では使えません'; } else fb.textContent=B.dir?'別のフォルダに切り替え':B.needPerm?'フォルダに再接続':'保存フォルダを選択(OneDrive等)'; $('#fsync').hidden=!B.dir; $('#fdis').hidden=!B.dir; }
   setStatus(); }
+/* ---------- 外国人の一覧(選択画面) ----------
+   人数が多いときに、表から選ぶ。検索(氏名・国籍・機関名・言語・申請の種類)、所属機関で絞込、列の見出しで並べ替え、行のクリック(または↑↓とEnter)で選択。 */
+const WL={sort:'name',dir:1,org:'',q:''};
+try{ const v=JSON.parse(localStorage.getItem('tokutei_wlist')||'{}'); if(v.sort) WL.sort=v.sort; if(v.dir) WL.dir=v.dir; }catch(_){}
+const WAPN={renew:'更新',coe:'認定',chg:'変更'};
+function wRow(w){ const o=w.link?S.orgs[w.link]:null, d=w.data, lg=wLang(w);
+  return {id:w.id,name:d.wk_name||'',nat:d.wk_nat||'',lang:(LANGS[lg]||lg||'').replace('併記',''),org:o?(o.data.org_name||'(機関名未入力)'):'機関未設定',orgId:w.link||'',ap:WAPN[d.ap_type]||'',dob:d.wk_dob||'',upd:(w.upd||'').slice(0,10)}; }
+function openWList(){
+  const cols=[['name','氏名'],['nat','国籍・地域'],['lang','書類の言語',1],['org','所属機関'],['ap','申請の種類',1],['dob','生年月日',1],['upd','最終更新',1]];
+  const orgs=Object.values(S.orgs).sort((a,b)=>(a.data.org_name||'￿').localeCompare(b.data.org_name||'￿','ja'));
+  const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const ov=document.createElement('div'); ov.className='ovl';
+  ov.innerHTML='<div class="dlg" role="dialog" aria-label="外国人の一覧"><h3>外国人の一覧から選ぶ <span class="cnt" id="wl_cnt"></span></h3>'+
+    '<div class="wl-tools"><input type="text" id="wl_q" placeholder="氏名・国籍・機関名などで検索" value="'+esc(WL.q)+'">'+
+    '<select id="wl_org"><option value="">所属機関: すべて</option>'+orgs.map(o=>'<option value="'+o.id+'"'+(WL.org===o.id?' selected':'')+'>'+esc(o.data.org_name||'(機関名未入力)')+'</option>').join('')+'<option value="-"'+(WL.org==='-'?' selected':'')+'>機関未設定</option></select>'+
+    '<button class="sec" id="wl_x">閉じる</button></div>'+
+    '<div class="wl-wrap"><table class="wl"><thead><tr>'+cols.map(c=>'<th data-c="'+c[0]+'"'+(c[2]?' class="hm"':'')+'>'+c[1]+' <span class="ar"></span></th>').join('')+'</tr></thead><tbody></tbody></table></div>'+
+    '<p class="note" style="margin:6px 0 0">行をクリックすると、その人を選んで一覧を閉じます。キーボードでは ↑↓ で移動、Enter で選択、Esc で閉じます。見出しをクリックすると並べ替えます。</p></div>';
+  document.body.appendChild(ov);
+  const tb=ov.querySelector('tbody'), q=ov.querySelector('#wl_q'), so=ov.querySelector('#wl_org'); let rows=[], kb=-1;
+  const close=()=>{ ov.remove(); document.removeEventListener('keydown',key,true); };
+  const pick=id=>{ if(!S.workers[id]) return; S.cur=id; wq=''; const ws=$('#wsearch'); if(ws) ws.value=''; if(!B.dir) localSave(); close(); renderAll(); };
+  const draw=()=>{ const qs=WL.q.toLowerCase().split(/[\s　]+/).filter(Boolean);
+    rows=Object.values(S.workers).map(wRow).filter(r=>(!WL.org||(WL.org==='-'?!r.orgId:r.orgId===WL.org))&&qs.every(t=>[r.name,r.nat,r.lang,r.org,r.ap].join(' ').toLowerCase().includes(t)));
+    const k=WL.sort; rows.sort((a,b)=>{ const x=a[k]||'', y=b[k]||''; if(!x!==!y) return x?-1:1; return String(x).localeCompare(String(y),'ja',{numeric:true})*WL.dir||a.name.localeCompare(b.name,'ja'); });   /* 空欄は常に最後 */
+    tb.innerHTML=rows.map((r,i)=>'<tr data-id="'+r.id+'" class="'+(r.id===S.cur?'cur':'')+(i===kb?' kb':'')+'"><td class="nm">'+esc(r.name||'(未入力)')+'</td><td>'+esc(r.nat)+'</td><td class="hm">'+esc(r.lang)+'</td><td>'+esc(r.org)+'</td><td class="hm">'+esc(r.ap)+'</td><td class="hm">'+esc(r.dob)+'</td><td class="hm">'+esc(r.upd)+'</td></tr>').join('')||'<tr><td colspan="7" style="cursor:default">該当する外国人はいません</td></tr>';
+    ov.querySelectorAll('th').forEach(th=>{ th.querySelector('.ar').textContent=th.dataset.c===WL.sort?(WL.dir>0?'▲':'▼'):''; });
+    ov.querySelector('#wl_cnt').textContent=rows.length+' / '+Object.keys(S.workers).length+'名'; };
+  const setKb=i=>{ if(!rows.length) return; kb=Math.max(0,Math.min(rows.length-1,i)); tb.querySelectorAll('tr').forEach((tr,j)=>tr.classList.toggle('kb',j===kb)); const t=tb.children[kb]; if(t&&t.scrollIntoView) t.scrollIntoView({block:'nearest'}); };
+  const key=e=>{ if(e.key==='Escape'){ e.preventDefault(); close(); } else if(e.key==='ArrowDown'){ e.preventDefault(); setKb(kb+1); } else if(e.key==='ArrowUp'){ e.preventDefault(); setKb(kb-1); }
+    else if(e.key==='Enter'&&(document.activeElement===q||kb>=0)){ const r=rows[kb>=0?kb:0]; if(r){ e.preventDefault(); pick(r.id); } } };
+  document.addEventListener('keydown',key,true);
+  tb.onclick=e=>{ const tr=e.target.closest('tr[data-id]'); if(tr) pick(tr.dataset.id); };
+  ov.querySelector('thead').onclick=e=>{ const th=e.target.closest('th'); if(!th) return; const c=th.dataset.c; if(WL.sort===c) WL.dir=-WL.dir; else { WL.sort=c; WL.dir=1; } try{ localStorage.setItem('tokutei_wlist',JSON.stringify({sort:WL.sort,dir:WL.dir})); }catch(_){} kb=-1; draw(); };
+  q.oninput=()=>{ WL.q=q.value.trim(); kb=-1; draw(); };
+  so.onchange=()=>{ WL.org=so.value; kb=-1; draw(); };
+  ov.querySelector('#wl_x').onclick=close; ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
+  draw(); const c=tb.querySelector('tr.cur'); if(c&&c.scrollIntoView) c.scrollIntoView({block:'center'});
+  if(!('ontouchstart' in window)) q.focus(); }
 function buildBar(){
   const bar=$('#bar'); bar.innerHTML=
    '<div class="brow"><b>保存先</b><span id="sstat"></span><button class="sec" id="fbtn"></button><button class="sec" id="fsync" hidden>最新に更新</button><button class="sec" id="fdis" hidden>接続解除</button><label class="un">更新者名 <input type="text" id="uname" placeholder="例: 田中" size="8"></label></div>'+
-   '<div class="brow"><b>外国人</b><input type="text" id="wsearch" placeholder="氏名・国籍・機関名で絞込" size="20"><select id="sw"></select><span class="cnt" id="wcnt"></span><button class="sec" id="wnew">+新規</button><button class="sec" id="dup">複製</button><button class="sec" id="del">削除</button></div>'+
+   '<div class="brow"><b>外国人</b><input type="text" id="wsearch" placeholder="氏名・国籍・機関名で絞込" size="20"><select id="sw"></select><button class="sec" id="wlist" title="外国人を一覧表から選ぶ(検索・並べ替え)">一覧から選ぶ</button><span class="cnt" id="wcnt"></span><button class="sec" id="wnew">+新規</button><button class="sec" id="dup">複製</button><button class="sec" id="del">削除</button></div>'+
    '<div class="brow"><b>特定技能所属機関</b><select id="so"></select><span class="cnt" id="ocnt"></span><button class="sec" id="onew">+新規</button><button class="sec" id="odel">削除</button>'+
    '<b style="margin-left:10px">登録支援機関</b><select id="sr"></select><span class="cnt" id="rcnt"></span><button class="sec" id="rnew">+新規</button><button class="sec" id="rdel">削除</button></div>'+
    '<p class="note warnx" id="nodir" hidden>この端末のブラウザ(iPad・iPhone の Safari 等)は、フォルダへの自動保存に対応していません。入力内容はこの端末のブラウザ内にだけ保存されます。ほかの端末(PCなど)と共有するときは、画面右(スマホでは下)の「バックアップ」で書き出し → OneDrive などに保存 → 別の端末で「読み込み」を使います。Safari は長期間開かないと保存内容が消えることがあるため、入力したらこまめに書き出してください。</p>'+
@@ -2112,6 +2162,7 @@ function buildBar(){
   $('#uname').oninput=e=>{ userName=e.target.value; try{localStorage.setItem('tokutei_user',userName);}catch(_){} };
   $('#wsearch').oninput=e=>{ wq=e.target.value.trim(); fillSelects(); };
   $('#sw').onchange=e=>{ S.cur=e.target.value; if(!B.dir) localSave(); renderAll(); };
+  $('#wlist').onclick=openWList;
   $('#wnew').onclick=()=>{ const c=curW(); const w=mk('wk',newWorkerData(),c?c.link:''); S.cur=w.id; wq=''; $('#wsearch').value=''; if(!B.dir) localSave(); renderAll(); };
   $('#dup').onclick=()=>{ const w=curW(); const n=mk('wk',JSON.parse(JSON.stringify(w.data)),w.link); n.data.wk_name=''; S.cur=n.id; touch('wk',n); renderAll(); };
   $('#del').onclick=async()=>{ const w=curW(); if(!confirm('「'+(w.data.wk_name||'(未入力)')+'」のデータを削除しますか?(フォルダ保存の場合はファイルも削除されます)')) return; await deleteRec('wk',w); S.cur=null; ensureW(); renderAll(); };
@@ -2194,9 +2245,9 @@ function markMiss(ks){
   $$('#form details').forEach(det=>{ const sm=det.querySelector('summary'); if(!sm) return; const n=det.querySelectorAll('label.f.miss').length; let b=sm.querySelector('.missbadge');
     if(n){ if(!b){ b=document.createElement('span'); b.className='missbadge'; sm.appendChild(b); } b.textContent='未入力 '+n; } else if(b) b.remove(); });
 }
-let lastCur=null;
+let lastCur=null, rosterQ='';
 function renderRosterUI(lang){
-  if(lastCur!==S.cur){ rosterSel.clear(); lastCur=S.cur; }
+  if(lastCur!==S.cur){ rosterSel.clear(); rosterQ=''; lastCur=S.cur; }
   const box=$('#roster'); if(!box) return; box.innerHTML=''; const c=rosterCands(), w=curW();
   const h=document.createElement('div'); h.innerHTML='<h2 style="margin-top:18px">同時に申請する外国人(申請人名簿・複数人の書類)</h2>';
   const p=document.createElement('p'); p.className='note';
@@ -2206,7 +2257,22 @@ function renderRosterUI(lang){
   h.appendChild(p);
   if(!c.length){ const q=document.createElement('p'); q.className='note'; q.textContent='(同じ所属機関のほかの外国人はいません。外国人ごとに「所属機関」を設定してください)'; h.appendChild(q); }
   const lg0=wLang(w);
-  c.forEach(x=>{ const l=document.createElement('label'); l.className='opt doc'; const i=document.createElement('input'); i.type='checkbox'; i.checked=rosterSel.has(x.id); i.onchange=()=>{ if(i.checked) rosterSel.add(x.id); else rosterSel.delete(x.id); renderOut(); }; const lx=wLang(x); l.append(i,' '+(x.data.wk_name||'(未入力)')+' / '+(x.data.wk_nat||'')+(lx!==lg0?' ('+(LANGS[lx]||lx)+')':'')); h.appendChild(l); });
+  /* 人数が多いときのために: 絞り込み(表示だけ)・表示中の全員を選択/解除・選択人数 */
+  if(c.length){
+    const tl=document.createElement('div'); tl.className='rs-tools';
+    tl.innerHTML='<input type="text" id="rs_q" placeholder="氏名・国籍・言語で絞込"><button class="sec" id="rs_all">表示中を全員選択</button><button class="sec" id="rs_none">全員解除</button><span class="cnt" id="rs_cnt"></span>';
+    h.appendChild(tl);
+    const ls=document.createElement('div'); ls.className='rs-list';
+    c.forEach(x=>{ const l=document.createElement('label'); l.className='opt doc'; const i=document.createElement('input'); i.type='checkbox'; i.checked=rosterSel.has(x.id); i.dataset.id=x.id; i.onchange=()=>{ if(i.checked) rosterSel.add(x.id); else rosterSel.delete(x.id); renderOut(); }; const lx=wLang(x);
+      l.dataset.s=[x.data.wk_name||'',x.data.wk_nat||'',LANGS[lx]||lx].join(' ').toLowerCase();
+      l.append(i,' '+(x.data.wk_name||'(未入力)')+' / '+(x.data.wk_nat||'')); if(lx!==lg0){ const e=document.createElement('span'); e.className='lx'; e.textContent=' ('+(LANGS[lx]||lx)+')'; l.appendChild(e); } ls.appendChild(l); });
+    h.appendChild(ls);
+    const q=tl.querySelector('#rs_q'), cnt=tl.querySelector('#rs_cnt');
+    const flt=()=>{ const ts=rosterQ.toLowerCase().split(/[\s　]+/).filter(Boolean); let v=0; ls.querySelectorAll('label').forEach(l=>{ const ok=ts.every(t=>l.dataset.s.includes(t)); l.hidden=!ok; if(ok) v++; }); cnt.textContent='選択 '+c.filter(x=>rosterSel.has(x.id)).length+' / '+c.length+'名'+(rosterQ?'(表示 '+v+')':''); };
+    q.value=rosterQ; q.oninput=()=>{ rosterQ=q.value.trim(); flt(); };
+    tl.querySelector('#rs_all').onclick=()=>{ ls.querySelectorAll('label:not([hidden]) input').forEach(i=>rosterSel.add(i.dataset.id)); renderOut(); };
+    tl.querySelector('#rs_none').onclick=()=>{ rosterSel.clear(); renderOut(); };
+    flt(); }
   const n=rosterList().length, ns=supRoster().length, st=document.createElement('p'); st.className='note';
   if(n>1){ const oth=rosterList().filter(x=>wLang(x)!==lg0).map(x=>x.data.wk_name||'(未入力)');
     st.innerHTML='<b>同時申請: '+n+'名</b>(申請人名簿を出力)'+(spOn?'<br>支援計画書: '+(ns>1?'<b>名簿方式 '+ns+'名</b>(「別紙の名簿のとおり」、名簿を同時に出力)':'名簿方式なし(同じ言語の人がいないため、1名分の通常の書類)')+(oth.length?'<br><span class="warn">書類の言語が異なる人('+oth.map(x=>String(x).replace(/</g,'&lt;')).join('、')+')の支援計画書は含めていません。その人を選んで別に出力してください。</span>':''):'')+(plOn?'<br>登録支援機関誓約書: <b>名簿方式 '+n+'名</b>(言語を問わず全員。名簿を同時に出力)':''); }
