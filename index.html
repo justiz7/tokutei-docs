@@ -1722,7 +1722,7 @@ window.DOCS=[
  {id:'hcdecl',apps:['coe','chg'],signRe:/^(作成年月日|Prepared on|Tanggal pembuatan|बनाएको दिन|申請人の署名|Signature of the applicant|Tanda tangan pemohon|घोषणा गर्ने मान्छेको हस्ताक्षर)/,name:'受診者の申告書(参考様式第1-3号 別紙)',each:1,sign:'末尾の「作成年月日」と「申請人の署名」欄(作成年月日はマスタに入力があれば印字、空欄なら本人が記入)'},
  {id:'taxr',apps:['renew','chg'],each:1,name:'理由書(入国1年未満のため納税証明書・課税証明書を提出できない理由。日本語のみ)',nosign:'様式に署名欄なし(右上に本人の氏名を印字)'},
  {id:'support',name:'1号特定技能外国人支援計画書(参考様式第1-17号)',roster:'1号特定技能外国人支援計画書（参考様式第1-17号）',apps:['coe','chg'],sign:'末尾の「署名日」と「１号特定技能外国人の署名」欄(その上の「翻訳文の交付を受け…理解しました」「面談方法の希望」の確認文も本人が確認)'},
- {id:'pledge',name:'登録支援機関誓約書(分野参考様式第11-4号・農業分野・日本語のみ)',roster:'登録支援機関誓約書（分野参考様式第11-4号）',nosign:'登録支援機関が作成'},
+ {id:'pledge',name:'登録支援機関誓約書(分野参考様式第11-4号・農業分野・日本語のみ)',roster:'登録支援機関誓約書（分野参考様式第11-4号）',anyLang:1,nosign:'登録支援機関が作成'},
 ];
 
 /* 外国語表記(母国語併記欄用): 各日本語項目の直後に _en / _ne を追加 */
@@ -1864,12 +1864,14 @@ function merged(){ return mergedFor(curW()); }
 const rosterSel=new Set();
 const wLang=w=>w.data.wk_lang||natInfo(w.data.wk_nat)[1];
 /* 同時に申請する外国人: 同じ所属機関の外国人(言語は問わない)。申請人名簿・提出書類一覧表・受診者の申告書に使う。
-   支援計画書・誓約書の名簿方式(別紙の名簿)は、書類の言語が同じ人だけ(supRoster) */
+   支援計画書の名簿方式(別紙の名簿)は、書類の言語が同じ人だけ(supRoster)。
+   登録支援機関誓約書(anyLang)は日本語のみの様式(3言語とも同じひな形)なので、言語を問わず同時に申請する全員を名簿にする(docRoster) */
 function rosterCands(){ const w=curW(); if(!w||!w.link) return [];
   return Object.values(S.workers).filter(x=>x.id!==w.id&&x.link===w.link).sort((a,b)=>(a.data.wk_name||'￿').localeCompare(b.data.wk_name||'￿','ja')); }
 function rosterList(){ const w=curW(); if(!w) return []; const ok=new Set(rosterCands().map(x=>x.id));
   return [w].concat([...rosterSel].filter(id=>ok.has(id)).map(id=>S.workers[id])); }
 function supRoster(){ const w=curW(); if(!w) return []; const lg=wLang(w); return rosterList().filter(x=>wLang(x)===lg); }
+function docRoster(doc){ return doc&&doc.anyLang?rosterList():supRoster(); }
 const SEXL={M:{ja:'男',en:'Male',id:'Laki-laki',ne:'पुरुष'},F:{ja:'女',en:'Female',id:'Perempuan',ne:'महिला'}};
 const IVL={both:{ja:'対面とオンラインの併用',en:'Combination of in-person and online',id:'Tatap muka dan online keduanya',ne:'प्रत्यक्ष र अनलाइन दुवै'},
   face:{ja:'対面のみ',en:'In person only',id:'Tatap muka saja',ne:'प्रत्यक्ष मात्र'},online:{ja:'オンライン',en:'Online',id:'Online',ne:'अनलाइन'}};
@@ -2140,7 +2142,7 @@ function signBox(lang){
   const hx=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const e=document.createElement('div'); e.className='signbox'; const nm=x=>x.name.replace(/\(.*$/,'');
   let h='<b class="t">✍ 外国人本人の署名が必要な書類</b>'+(need.length?'<ul>'+need.map(x=>'<li><b>'+hx(nm(x))+'</b>: '+hx(x.sign)+'</li>').join('')+(n>1&&need.some(x=>x.id==='hcdecl')?'<li><b>受診者の申告書</b>: 名簿の'+n+'名分を1人1枚ずつ出力します(各人が署名)</li>':'')+(ns>1&&need.some(x=>x.id==='support')?'<li><b>支援計画書の別紙(名簿)</b>: 「署　名」欄に名簿の'+ns+'名それぞれが署名(支援計画書の署名欄は「別紙のとおり」)</li>':'')+'</ul>':'<div>選択中の書類にはありません。</div>');
-  const ex=no.map(x=>nm(x)+'('+x.nosign+')'); if(ns>1&&on.some(x=>x.id==='pledge')) ex.push('登録支援機関誓約書の別紙(名簿)にも「署　名」欄がありますが、誓約書本体に本人の署名欄がないため、署名の要否は様式からは判断できません(要確認)');
+  const ex=no.map(x=>nm(x)+'('+x.nosign+')'); if(n>1&&on.some(x=>x.id==='pledge')) ex.push('登録支援機関誓約書の別紙(名簿)にも「署　名」欄がありますが、誓約書本体に本人の署名欄がないため、署名の要否は様式からは判断できません(要確認)');
   ex.push('提出書類一覧表(Excel)・申請人名簿(Excel)');
   h+='<p class="note">署名欄なし: '+hx(ex.join(' / '))+'。書類プレビューでは、本人の署名欄をピンクで示します。署名欄の有無は本ツールのひな形(参考様式)の記載から判定したもので、入管庁の案内での確認はしていません。</p>';
   e.innerHTML=h; return e; }
@@ -2199,15 +2201,15 @@ function renderRosterUI(lang){
   const h=document.createElement('div'); h.innerHTML='<h2 style="margin-top:18px">同時に申請する外国人(申請人名簿・複数人の書類)</h2>';
   const p=document.createElement('p'); p.className='note';
   if(!w||!w.link){ p.textContent='外国人に所属機関を設定すると、同じ所属機関の外国人を選べます(複数人を同時に申請する場合)。'; h.appendChild(p); box.appendChild(h); return; }
-  const md=merged(), dOn=id=>{ const x=DOCS.find(y=>y.id===id); return !!x&&!!templateFor(id,lang)&&docOnF(x,md); }, supOn=dOn('support')||dOn('pledge');
-  p.textContent='いま選択中の外国人('+(w.data.wk_name||'未入力')+')と同時に申請する、同じ所属機関の外国人を選んでください。選んだ人は、申請人名簿(Excel。第1表の項番1「申請人名簿」が「有」になります)・提出書類一覧表(1人1部)'+(dOn('hcdecl')?'・受診者の申告書(1人1枚)':'')+'に入ります。'+(supOn?'1号支援計画書・登録支援機関誓約書は、書類の言語('+LANGS[lang]+')が同じ人だけを名簿方式(Ⅰ欄は「別紙の名簿のとおり」、名簿を別ファイルで出力)にします(様式の注により、支援内容が同一で同時に申請する場合に限ります)。計画書のそのほかの内容は選択中の外国人の入力で作成されます。':'')+'雇用契約書・雇用条件書などの個別の書類は、選択中の1名分のみです(各人を選んで出力してください)。';
+  const md=merged(), dOn=id=>{ const x=DOCS.find(y=>y.id===id); return !!x&&!!templateFor(id,lang)&&docOnF(x,md); }, spOn=dOn('support'), plOn=dOn('pledge'), supOn=spOn||plOn;
+  p.textContent='いま選択中の外国人('+(w.data.wk_name||'未入力')+')と同時に申請する、同じ所属機関の外国人を選んでください。選んだ人は、申請人名簿(Excel。第1表の項番1「申請人名簿」が「有」になります)・提出書類一覧表(1人1部)'+(dOn('hcdecl')?'・受診者の申告書(1人1枚)':'')+'に入ります。'+(spOn?'1号支援計画書は、書類の言語('+LANGS[lang]+')が同じ人だけを名簿方式(Ⅰ欄は「別紙の名簿のとおり」、名簿を別ファイルで出力)にします(様式の注により、支援内容が同一で同時に申請する場合に限ります)。計画書のそのほかの内容は選択中の外国人の入力で作成されます。':'')+(plOn?'登録支援機関誓約書は日本語のみの様式のため、言語を問わず選んだ全員を名簿方式(氏名などは「別紙のとおり」、名簿を別ファイルで出力)にします。':'')+'雇用契約書・雇用条件書などの個別の書類は、選択中の1名分のみです(各人を選んで出力してください)。';
   h.appendChild(p);
   if(!c.length){ const q=document.createElement('p'); q.className='note'; q.textContent='(同じ所属機関のほかの外国人はいません。外国人ごとに「所属機関」を設定してください)'; h.appendChild(q); }
   const lg0=wLang(w);
   c.forEach(x=>{ const l=document.createElement('label'); l.className='opt doc'; const i=document.createElement('input'); i.type='checkbox'; i.checked=rosterSel.has(x.id); i.onchange=()=>{ if(i.checked) rosterSel.add(x.id); else rosterSel.delete(x.id); renderOut(); }; const lx=wLang(x); l.append(i,' '+(x.data.wk_name||'(未入力)')+' / '+(x.data.wk_nat||'')+(lx!==lg0?' ('+(LANGS[lx]||lx)+')':'')); h.appendChild(l); });
   const n=rosterList().length, ns=supRoster().length, st=document.createElement('p'); st.className='note';
   if(n>1){ const oth=rosterList().filter(x=>wLang(x)!==lg0).map(x=>x.data.wk_name||'(未入力)');
-    st.innerHTML='<b>同時申請: '+n+'名</b>(申請人名簿を出力)'+(supOn?'<br>支援計画書・誓約書: '+(ns>1?'<b>名簿方式 '+ns+'名</b>(「別紙の名簿のとおり」、名簿を同時に出力)':'名簿方式なし(同じ言語の人がいないため、1名分の通常の書類)')+(oth.length?'<br><span class="warn">書類の言語が異なる人('+oth.map(x=>String(x).replace(/</g,'&lt;')).join('、')+')の支援計画書・誓約書は含めていません。その人を選んで別に出力してください。</span>':''):''); }
+    st.innerHTML='<b>同時申請: '+n+'名</b>(申請人名簿を出力)'+(spOn?'<br>支援計画書: '+(ns>1?'<b>名簿方式 '+ns+'名</b>(「別紙の名簿のとおり」、名簿を同時に出力)':'名簿方式なし(同じ言語の人がいないため、1名分の通常の書類)')+(oth.length?'<br><span class="warn">書類の言語が異なる人('+oth.map(x=>String(x).replace(/</g,'&lt;')).join('、')+')の支援計画書は含めていません。その人を選んで別に出力してください。</span>':''):'')+(plOn?'<br>登録支援機関誓約書: <b>名簿方式 '+n+'名</b>(言語を問わず全員。名簿を同時に出力)':''); }
   else st.innerHTML='同時申請なし(1名分を出力)';
   h.appendChild(st);
   box.appendChild(h); }
@@ -2369,14 +2371,14 @@ function b64(s){const bin=atob(s);const u=new Uint8Array(bin.length);for(let i=0
 async function gen(asZip){
   if(allRecs().some(([k,r])=>r._dirty)) await flush();
   const d=merged(), lang=d.wk_lang||'en'; const safe=(d.wk_name||'worker').replace(/[^\w\-]+/g,'_');
-  const out=[]; const rs=rosterList(), ros=rs.length>1, srs=supRoster(), sros=srs.length>1;   /* rs=同時に申請する全員、srs=そのうち書類の言語が同じ人(支援計画書・誓約書の名簿) */
+  const out=[]; const rs=rosterList(), ros=rs.length>1, srs=supRoster(), sros=srs.length>1;   /* rs=同時に申請する全員、srs=そのうち書類の言語が同じ人(支援計画書の名簿。誓約書は docRoster で全員) */
   for(const doc of DOCS){ const t=templateFor(doc.id,lang); if(!t||!(docOnF(doc,d)||(doc.each&&ros&&sel[doc.id]!==false&&rs.some(x=>docUse(doc,mergedFor(x)).ok)))) continue;   /* 1人1枚の書類は、同時申請者のだれかに必要なら出力 */
-    let dd=d;
-    if(sros&&doc.roster){ const ivs=new Set(srs.map(x=>x.data.wk_iv||'')); dd=Object.assign({},d,{roster_n:srs.length,wk_iv:ivs.size===1?[...ivs][0]:''}); }
+    let dd=d; const drs=docRoster(doc), dros=drs.length>1;   /* 名簿方式の対象: 支援計画書=同じ言語の人、誓約書=全員 */
+    if(dros&&doc.roster){ const ivs=new Set(drs.map(x=>x.data.wk_iv||'')); dd=Object.assign({},d,{roster_n:drs.length,wk_iv:ivs.size===1?[...ivs][0]:''}); }
     if(doc.each&&ros){ for(const x of rs){ const m=mergedFor(x), lg=m.wk_lang||lang, t2=templateFor(doc.id,lg)||t, sf=(m.wk_name||'worker').replace(/[^\w\-]+/g,'_'); if(!docUse(doc,m).ok) continue; out.push({name:sf+'_'+doc.id+'_'+lg+'.docx',bytes:await Fill.render(JSZip,b64(t2),m)}); } continue; }   /* 受診者の申告書: 同時申請でも1人1枚(各人の言語) */
-    const bytes=await Fill.render(JSZip,b64(t),dd); out.push({name:safe+'_'+doc.id+'_'+lang+(sros&&doc.roster?'_roster'+srs.length:'')+'.docx',bytes});
-    if(sros&&doc.roster&&templateFor('roster',lang)){
-      const rows=srs.map((x,i)=>rosterRow(i,x,lang)); const N=srs.length;
+    const bytes=await Fill.render(JSZip,b64(t),dd); out.push({name:safe+'_'+doc.id+'_'+lang+(dros&&doc.roster?'_roster'+drs.length:'')+'.docx',bytes});
+    if(dros&&doc.roster&&templateFor('roster',lang)){
+      const rows=drs.map((x,i)=>rosterRow(i,x,lang)); const N=drs.length;
       const note='';
       const rb=await Fill.render(JSZip,b64(templateFor('roster',lang)),Object.assign({},d,{roster_title:doc.roster}),rows);
       out.push({name:safe+'_'+doc.id+'_roster_list_'+lang+'.docx',bytes:rb}); } }
@@ -2505,7 +2507,7 @@ function pvItems(){ const d=merged(), lang=d.wk_lang||'en', n=rosterList().lengt
   XL.KINDS.forEach(k=>{ if(sel[k.id]===false||k.once) return; let st; try{ st=XL.status(k.kind,d,{rosterN:n}); }catch(e){ st={ok:false,reason:String(e.message||e)}; } if(st.hide) return; out.push({id:k.id,t:'xl',k:k,st:st,name:k.file.replace(/^提出書類一覧表_?/,'Excel '),let:'xl'}); });
   return out; }
 async function pvBytes(it,dd){
-  if(it.t==='doc'){ const doc=it.doc, lang=dd.wk_lang||'en', rs=supRoster(), ros=rs.length>1; let d2=dd;
+  if(it.t==='doc'){ const doc=it.doc, lang=dd.wk_lang||'en', rs=docRoster(doc), ros=rs.length>1; let d2=dd;
     if(ros&&doc.roster){ const ivs=new Set(rs.map(x=>x.data.wk_iv||'')); d2=Object.assign({},dd,{roster_n:rs.length,wk_iv:ivs.size===1?[...ivs][0]:''}); }
     return Fill.render(JSZip,b64(templateFor(doc.id,lang)),d2); }
   return XL.render(JSZip,b64(window.XLTEMPLATES[XL.tplKey(it.k.kind,dd)]),it.k.kind,dd,{rosterN:rosterList().length});
