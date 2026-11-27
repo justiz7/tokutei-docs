@@ -2213,6 +2213,9 @@ function renderOut(){
     if(renderOut._sig!==undefined&&renderOut._sig!==sig){ renderOut._sig=sig; setTimeout(()=>{ renderScope(); renderForm(); renderOut(); },0); } renderOut._sig=sig; }
   const hid=[]; DOCS.forEach(doc=>{ const u=docUseR(doc,d); if(!u.ok){ hid.push(doc.name.replace(/\(.*$/,'')+'('+u.why+')'); return; } const ok=!!templateFor(doc.id,lang); const l=document.createElement('label'); l.className='opt doc'+(ok?'':' off'); const i=document.createElement('input'); i.type='checkbox'; i.checked=ok&&(sel[doc.id]!==false); i.disabled=!ok; i.onchange=()=>{sel[doc.id]=i.checked; renderOut();}; l.append(i,' '+doc.name+(ok?'':'  ※'+LANGS[lang]+'版の様式ファイルが未取り込みです')); if(doc.sign){ const b=document.createElement('span'); b.className='signb'; b.textContent='✍本人署名'; b.title='外国人本人の署名が必要: '+doc.sign; l.appendChild(b); } box.appendChild(l); });
   if(hid.length){ const n=document.createElement('p'); n.className='note'; n.style.margin='4px 0'; n.textContent='表示していない書類: '+hid.join(' / '); box.appendChild(n); }
+  { const rs=rosterList(); if(rs.length>1) DOCS.forEach(doc=>{ if(!doc.each||sel[doc.id]===false||!docUseR(doc,d).ok||!templateFor(doc.id,lang)) return;   /* 1人1枚の書類: 同時申請者ごとに出力する人・しない人を表示 */
+    const yes=[], no=[]; rs.forEach(x=>{ const u=docUse(doc,mergedFor(x)), nm=x.data.wk_name||'(氏名未入力)'; if(u.ok) yes.push(nm); else no.push(nm+'('+u.why+')'); });
+    const n=document.createElement('p'); n.className='note'; n.style.margin='2px 0 4px 1.6em'; n.textContent='※ '+doc.name.replace(/\(.*$/,'')+': 1人1枚で '+yes.length+'名分を出力'+(yes.length?'('+yes.join('、')+')':'')+(no.length?' / 出力しない: '+no.join('、'):''); if(no.length) n.classList.add('warn'); box.appendChild(n); }); }
   box.appendChild(signBox(lang));
   /* 提出書類一覧表(Excel): 書類の言語に依存しない(日本語の様式) */
   const dv=Fill.derive(Object.assign({},d));   /* 作成責任者など、選択から決まる値は計算後の値で確認する */
@@ -2442,14 +2445,17 @@ async function immiExport(ws){
 }
 window.immiExport=immiExport; window.IMX=IMX; window.imxSel=IMXSEL;
 function b64(s){const bin=atob(s);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
+/* ファイル名: 氏名の日本語(カタカナ・漢字)・外国語の文字は残す(以前は英数字以外を「_」にしたため、カタカナ等の氏名の人が全員「__」になり、1人1枚の書類・提出書類一覧表が ZIP 内で上書きされ1人分しか残らなかった) */
+function fnSafe(n){ const t=String(n||'').normalize('NFC').trim().replace(/[^\p{L}\p{M}\p{N}\-]+/gu,'_').replace(/^_+|_+$/g,''); return t||'worker'; }
+function uniqNames(out){ const seen=new Set(); out.forEach(o=>{ let nm=o.name; if(seen.has(nm)){ const i=nm.lastIndexOf('.'); let k=2; while(seen.has(nm.slice(0,i)+'_'+k+nm.slice(i))) k++; nm=nm.slice(0,i)+'_'+k+nm.slice(i); } seen.add(nm); o.name=nm; }); return out; }
 async function gen(asZip){
   if(allRecs().some(([k,r])=>r._dirty)) await flush();
-  const d=merged(), lang=d.wk_lang||'en'; const safe=(d.wk_name||'worker').replace(/[^\w\-]+/g,'_');
+  const d=merged(), lang=d.wk_lang||'en'; const safe=fnSafe(d.wk_name);
   const out=[]; const rs=rosterList(), ros=rs.length>1, srs=supRoster(), sros=srs.length>1;   /* rs=同時に申請する全員、srs=そのうち書類の言語が同じ人(支援計画書の名簿。誓約書は docRoster で全員) */
   for(const doc of DOCS){ const t=templateFor(doc.id,lang); if(!t||!(docOnF(doc,d)||(doc.each&&ros&&sel[doc.id]!==false&&rs.some(x=>docUse(doc,mergedFor(x)).ok)))) continue;   /* 1人1枚の書類は、同時申請者のだれかに必要なら出力 */
     let dd=d; const drs=docRoster(doc), dros=drs.length>1;   /* 名簿方式の対象: 支援計画書=同じ言語の人、誓約書=全員 */
     if(dros&&doc.roster){ const ivs=new Set(drs.map(x=>x.data.wk_iv||'')); dd=Object.assign({},d,{roster_n:drs.length,wk_iv:ivs.size===1?[...ivs][0]:''}); }
-    if(doc.each&&ros){ for(const x of rs){ const m=mergedFor(x), lg=m.wk_lang||lang, t2=templateFor(doc.id,lg)||t, sf=(m.wk_name||'worker').replace(/[^\w\-]+/g,'_'); if(!docUse(doc,m).ok) continue; out.push({name:sf+'_'+doc.id+'_'+lg+'.docx',bytes:await Fill.render(JSZip,b64(t2),m)}); } continue; }   /* 受診者の申告書: 同時申請でも1人1枚(各人の言語) */
+    if(doc.each&&ros){ for(const x of rs){ const m=mergedFor(x), lg=m.wk_lang||lang, t2=templateFor(doc.id,lg)||t, sf=fnSafe(m.wk_name); if(!docUse(doc,m).ok) continue; out.push({name:sf+'_'+doc.id+'_'+lg+'.docx',bytes:await Fill.render(JSZip,b64(t2),m)}); } continue; }   /* 受診者の申告書: 同時申請でも1人1枚(各人の言語) */
     const bytes=await Fill.render(JSZip,b64(t),dd); out.push({name:safe+'_'+doc.id+'_'+lang+(dros&&doc.roster?'_roster'+drs.length:'')+'.docx',bytes});
     if(dros&&doc.roster&&templateFor('roster',lang)){
       const rows=drs.map((x,i)=>rosterRow(i,x,lang)); const N=drs.length;
@@ -2464,9 +2470,10 @@ async function gen(asZip){
       out.push({name:safe+'_'+k.file+'.xlsx',bytes}); continue; }
     for(const x of rs){ const dd=mergedFor(x); const st=XL.status(k.kind,dd,{rosterN:rs.length}); if(!st.ok) continue;
       const bytes=await XL.render(JSZip,b64(window.XLTEMPLATES[XL.tplKey(k.kind,dd)]),k.kind,dd,{rosterN:rs.length});
-      const sf=(dd.wk_name||'worker').replace(/[^\w\-]+/g,'_');
+      const sf=fnSafe(dd.wk_name);
       out.push({name:sf+'_'+k.file+(/^(tbl3|tbl13)$/.test(k.kind)?'の'+st.n:'')+'.xlsx',bytes}); } }
   if(!out.length){alert('出力できる書類がありません');return;}
+  uniqNames(out);   /* 同じ名前のファイルがあれば _2, _3 を付ける(ZIP 内での上書きを防ぐ) */
   if(asZip&&out.length>1){ const z=new JSZip(); out.forEach(o=>z.file(o.name,o.bytes)); const zb=await z.generateAsync({type:'uint8array'}); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([zb],{type:'application/zip'})); a.download=safe+'_documents.zip'; document.body.appendChild(a); a.click(); setTimeout(()=>a.remove(),1500); }
   else out.forEach((o,i)=>setTimeout(()=>dl(o.name,o.bytes),i*400));
 }
